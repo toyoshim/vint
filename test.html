@@ -13,6 +13,19 @@
     await xdf.open(io);
     const fat = new FatFs();
     await fat.open(xdf);
+    console.log(await fat.getAttributes());
+    await fat.list(entry => {
+      console.log(entry);
+    });
+    await fat.chdir('SYS');
+    await fat.list(entry => {
+      console.log(entry);
+    });
+    await fat.chdir('..');
+    await fat.list(entry => {
+      console.log(entry);
+    });
+    await fat.chdir('DOC');
     await fat.list(entry => {
       console.log(entry);
     });

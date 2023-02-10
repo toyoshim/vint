@@ -100,6 +100,8 @@ export class FatFs {
   #dataSectors = 0;
   #fatType = 0;
   #fat = null;
+  #currentDirectoryStartSector = 0;
+  #currentDirectorySectors = 0;
 
   async open(image) {
     if (this.#image) {
@@ -159,23 +161,56 @@ export class FatFs {
     }
     this.#image = image;
     this.#fat = await this.#readSectors(this.#fatStartSector, this.#fatSectors);
-    console.log(this);
+    await this.#list(entry => {
+      if (!entry.volume) {
+        return;
+      }
+      this.#volumeLabel = entry.name;
+    }, true);
   }
 
   async list(observer) {
     await this.#list(observer, true);
   }
 
+  async chdir(name) {
+    await this.#list(async entry => {
+      if (!entry.directory || entry.name != name) {
+        return;
+      }
+      if (entry.cluster == 0) {
+        this.#currentDirectoryStartSector = 0;
+        this.#currentDirectorySectors = 0;
+        return;
+      }
+      let size = 0;
+      for (let cluster = entry.cluster; cluster != 0xfff; size++) {
+        cluster = await this.#getFat(cluster);
+        if (!cluster) {
+          throw Error.createInvalidFormat('invalid directory entry');
+        }
+      }
+      this.#currentDirectoryStartSector =
+        this.#dataStartSector + (entry.cluster - 2) * this.#sectorPerCluster;
+      this.#currentDirectorySectors = size * this.#sectorPerCluster;
+    }, true);
+  }
+
+  // mkdir
+
   async getAttributes() {
     return {
-      encoding: 'Shift_JIS'
+      encoding: 'Shift_JIS',
+      volumeLevel: this.#volumeLabel
     };
   }
 
   async #list(observer, showPrivate) {
-    const entry = await this.#readSectors(
-      this.#rootDirectoryStartSector,
-      this.#rootDirectorySectors);
+    const startSector =
+      this.#currentDirectoryStartSector || this.#rootDirectoryStartSector;
+    const sectors =
+      this.#currentDirectorySectors || this.#rootDirectorySectors;
+    const entry = await this.#readSectors(startSector, sectors);
     for (let index = 0; index < this.#rootEntryCount; ++index) {
       const firstEntry = entry[32 * index];
       if (firstEntry == 0xe5) {
