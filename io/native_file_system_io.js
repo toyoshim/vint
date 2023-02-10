@@ -67,13 +67,19 @@ export class NativeFileSystemIO {
   }
 
   async flush() {
+    if (this.#writableStream) {
+      await this.#writableStream.close();
+      this.#writableStream = null;
+    }
   }
 
   async close() {
-    this.#writableStream.close();
+    if (this.#writableStream) {
+      await this.#writableStream.close();
+      this.#writableStream = null;
+    }
     this.#file = null;
     this.#handle = null;
-    this.#writableStream = null;
     this.#offset = 0;
   }
 
