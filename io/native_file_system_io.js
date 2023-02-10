@@ -70,6 +70,7 @@ export class NativeFileSystemIO {
   }
 
   async close() {
+    this.#writableStream.close();
     this.#file = null;
     this.#handle = null;
     this.#writableStream = null;
