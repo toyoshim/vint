@@ -19,14 +19,17 @@
       console.log(entry);
     });
     await fat.chdir('SYS');
+    console.log(await fat.getCwd());
     await fat.list(entry => {
       console.log(entry);
     });
     await fat.chdir('..');
+    console.log(await fat.getCwd());
     await fat.list(entry => {
       console.log(entry);
     });
     await fat.chdir('DOC');
+    console.log(await fat.getCwd());
     await fat.list(entry => {
       console.log(entry);
     });

@@ -100,8 +100,9 @@ export class FatFs {
   #dataSectors = 0;
   #fatType = 0;
   #fat = null;
-  #currentDirectoryStartSector = 0;
-  #currentDirectorySectors = 0;
+  #currentDirectoryStartCluster = 0;
+  #currentDirectoryClusters = 0;
+  #path = [];
 
   async open(image) {
     if (this.#image) {
@@ -179,8 +180,9 @@ export class FatFs {
         return;
       }
       if (entry.cluster == 0) {
-        this.#currentDirectoryStartSector = 0;
-        this.#currentDirectorySectors = 0;
+        this.#currentDirectoryStartCluster = 0;
+        this.#currentDirectoryClusters = 0;
+        this.#path = [];
         return;
       }
       let size = 0;
@@ -190,9 +192,13 @@ export class FatFs {
           throw Error.createInvalidFormat('invalid directory entry');
         }
       }
-      this.#currentDirectoryStartSector =
-        this.#dataStartSector + (entry.cluster - 2) * this.#sectorPerCluster;
-      this.#currentDirectorySectors = size * this.#sectorPerCluster;
+      this.#currentDirectoryStartCluster = entry.cluster;
+      this.#currentDirectoryClusters = size;
+      if (name == '..') {
+        this.#path.pop();
+      } else {
+        this.#path.push(name);
+      }
     }, true);
   }
 
@@ -207,12 +213,12 @@ export class FatFs {
     };
   }
 
+  async getCwd() {
+    return '/' + this.#path.join('/');
+  }
+
   async #list(observer, showPrivate) {
-    const startSector =
-      this.#currentDirectoryStartSector || this.#rootDirectoryStartSector;
-    const sectors =
-      this.#currentDirectorySectors || this.#rootDirectorySectors;
-    const entry = await this.#readSectors(startSector, sectors);
+    const entry = await this.#readDirectoryEntries();
     for (let index = 0; index < this.#rootEntryCount; ++index) {
       const firstEntry = entry[32 * index];
       if (firstEntry == 0xe5) {
@@ -282,6 +288,37 @@ export class FatFs {
       }
     }
     return dst;
+  }
+
+  async #readClusters(cluster, count) {
+    const buffer =
+      new ArrayBuffer(this.#bytesPerSector * this.#sectorPerCluster * count);
+    const dst = new Uint8Array(buffer);
+    for (let i = 0; i < count; ++i) {
+      const sector =
+        this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
+      for (let j = 0; j < this.#sectorPerCluster; ++j) {
+        const src = new Uint8Array(await this.#image.read(sector + j));
+        const offset = this.#bytesPerSector * (i * this.#sectorPerCluster + j);
+        for (let k = 0; k < this.#bytesPerSector; ++k) {
+          dst[offset + k] = src[k];
+        }
+      }
+      cluster = this.#getFat(cluster);
+    }
+    return dst;
+  }
+
+  async #readDirectoryEntries() {
+    if (this.#currentDirectoryStartCluster == 0) {
+      return await this.#readSectors(
+        this.#rootDirectoryStartSector,
+        this.#rootDirectorySectors);
+    } else {
+      return await this.#readClusters(
+        this.#currentDirectoryStartCluster,
+        this.#currentDirectoryClusters);
+    }
   }
 
   async #getFat(cluster) {
