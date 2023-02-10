@@ -28,25 +28,25 @@ function getEntryName(buffer, index) {
     if (buffer[offset + i] == 0x20) {
       break;
     }
-    chars.push(String.fromCharCode(buffer[offset + i]));
+    chars.push(buffer[offset + i]);
   }
   // Human68k extension.
   for (let i = 12; i < 21; ++i) {
     if (buffer[offset + i] == 0) {
       break;
     }
-    chars.push(String.fromCharCode(buffer[offset + i]));
+    chars.push(buffer[offset + i]);
   }
   for (let i = 8; i < 11; ++i) {
     if (buffer[offset + i] == 0x20) {
       break;
     }
     if (i == 8) {
-      chars.push('.');
+      chars.push('.'.charCodeAt(0));
     }
-    chars.push(String.fromCharCode(buffer[offset + i]));
+    chars.push(buffer[offset + i]);
   }
-  return chars.join('');
+  return chars;
 }
 
 function getTimestamp(date, time, subtime) {
@@ -198,6 +198,8 @@ export class FatFs {
 
   // mkdir
 
+  // getIo
+
   async getAttributes() {
     return {
       encoding: 'Shift_JIS',
@@ -249,6 +251,17 @@ export class FatFs {
         modified: modified,
         size: getLong(entry, 32 * index + 28)
       };
+      if (window.Encoding) {
+        data.nameArray = data.name;
+        const unicodeArray = Encoding.convert(data.name, {
+          to: 'UNICODE',
+          from: 'SJIS'
+        });
+        data.name = Encoding.codeToString(unicodeArray);
+        data.rawName = data.nameArray.join('');
+      } else {
+        data.name = data.name.join('');
+      }
       if (showPrivate) {
         const clusterHigh = getShort(entry, 32 * index + 20);
         const clusterLow = getShort(entry, 32 * index + 26);
