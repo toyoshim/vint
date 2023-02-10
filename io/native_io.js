@@ -4,7 +4,7 @@
 
 import { Error } from "../error.js"
 
-export class NativeFileSystemIO {
+export class NativeIO {
   #handle = null;
   #file = null;
   #offset = 0;
@@ -17,7 +17,7 @@ export class NativeFileSystemIO {
     return {
       name: this.#handle.name,
       size: this.#file.size,
-      lastModified: this.#file.lastModified
+      lastModified: new Date(this.#file.lastModified)
     };
   }
 

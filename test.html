@@ -4,10 +4,9 @@
   import { FatFs } from "./fs/fat_fs.js"
   import { NativeFs } from "./fs/native_fs.js"
   import { XdfImage } from "./image/xdf_image.js"
-  import { NativeFileSystemIO } from "./io/native_file_system_io.js"
+  import { NativeIO } from "./io/native_io.js"
 
-  /*
-  const io = new NativeFileSystemIO();
+  const io = new NativeIO();
   document.getElementById('run').addEventListener('click', async e => {
     await io.choose();
     const xdf = new XdfImage();
@@ -18,8 +17,8 @@
       console.log(entry);
     });
   });
-  */
 
+  /*
   const nfs = new NativeFs();
   document.getElementById('run').addEventListener('click', async e => {
     await nfs.choose();
@@ -27,6 +26,7 @@
       console.log(entry);
     });
   });
+  */
 </script>
 
 </html>
