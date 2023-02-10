@@ -12,8 +12,8 @@ export class Error {
   static createInvalidRequest() {
     return new Error(Error.invalidRequest);
   }
-  static createInvalidFormat() {
-    return new Error(Error.invalidFormat);
+  static createInvalidFormat(hint) {
+    return new Error(Error.invalidFormat, hint);
   }
 
   static unknown = 0;
@@ -23,8 +23,12 @@ export class Error {
   static invalidFormat = 4;
 
   #id = Error.unknown;
+  #hint = '';
 
-  constructor(id) {
+  constructor(id, hint) {
     this.#id = id;
+    if (hint) {
+      this.#hint = hint;
+    }
   }
 }
