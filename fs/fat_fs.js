@@ -169,7 +169,7 @@ export class FatFs {
   async getAttributes() {
     return {
       encoding: 'Shift_JIS'
-    }
+    };
   }
 
   async #list(observer, showPrivate) {

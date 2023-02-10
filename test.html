@@ -2,9 +2,11 @@
 <button id="run">Run</button>
 <script type="module">
   import { FatFs } from "./fs/fat_fs.js"
+  import { NativeFs } from "./fs/native_fs.js"
   import { XdfImage } from "./image/xdf_image.js"
   import { NativeFileSystemIO } from "./io/native_file_system_io.js"
 
+  /*
   const io = new NativeFileSystemIO();
   document.getElementById('run').addEventListener('click', async e => {
     await io.choose();
@@ -14,7 +16,16 @@
     await fat.open(xdf);
     await fat.list(entry => {
       console.log(entry);
-    })
+    });
+  });
+  */
+
+  const nfs = new NativeFs();
+  document.getElementById('run').addEventListener('click', async e => {
+    await nfs.choose();
+    await nfs.list(entry => {
+      console.log(entry);
+    });
   });
 </script>
 
