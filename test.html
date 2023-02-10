@@ -1,0 +1,23 @@
+<html>
+<button id="run">Run</button>
+<script type="module">
+  import { NativeFileSystemIO } from "./io/native_file_system_io.js"
+  const a = new NativeFileSystemIO();
+  const b = new NativeFileSystemIO();
+  document.getElementById('run').addEventListener('click', async e => {
+    await a.choose();
+    await b.choose();
+    console.log(await a.getAttributes());
+    console.log(await b.getAttributes());
+    while (true) {
+      let buffer = await a.read(1234);
+      if (!buffer) {
+        break;
+      }
+      await b.write(buffer);
+    }
+    b.close();
+  });
+</script>
+
+</html>
