@@ -15,12 +15,16 @@ export class Error {
   static createInvalidFormat(hint) {
     return new Error(Error.invalidFormat, hint);
   }
+  static createNotImplemented(hint) {
+    return new Error(Error.notImplemented, hint);
+  }
 
   static unknown = 0;
   static notOpen = 1;
   static invalidBuffer = 2;
   static invalidRequest = 3;
   static invalidFormat = 4;
+  static notImplemented = 5;
 
   #id = Error.unknown;
   #hint = '';

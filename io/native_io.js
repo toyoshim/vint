@@ -4,7 +4,7 @@
 
 import { Error } from "../error.js"
 
-export class NativeIO {
+export class NativeIo {
   #handle = null;
   #file = null;
   #offset = 0;

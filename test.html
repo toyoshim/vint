@@ -5,11 +5,13 @@
   import { FatFs } from "./fs/fat_fs.js"
   import { NativeFs } from "./fs/native_fs.js"
   import { XdfImage } from "./image/xdf_image.js"
-  import { NativeIO } from "./io/native_io.js"
+  import { NativeIo } from "./io/native_io.js"
 
-  const io = new NativeIO();
+  const io = new NativeIo();
+  const out = new NativeIo();
   document.getElementById('run').addEventListener('click', async e => {
     await io.choose();
+    await out.choose();
     const xdf = new XdfImage();
     await xdf.open(io);
     const fat = new FatFs();
@@ -28,11 +30,17 @@
     await fat.list(entry => {
       console.log(entry);
     });
-    await fat.chdir('DOC');
-    console.log(await fat.getCwd());
-    await fat.list(entry => {
-      console.log(entry);
-    });
+    const file = await fat.getIo('AUTOEXEC.BAT');
+    console.log(file);
+    while (true) {
+      const data = await file.read(1024);
+      console.log(data.byteLength);
+      if (data.byteLength == 0) {
+        break;
+      }
+      await out.write(data);
+    }
+    out.close();
   });
 
   /*

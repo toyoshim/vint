@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 import { Error } from "../error.js"
+import { FatFsIo } from "../io/fat_fs_io.js"
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -204,7 +205,24 @@ export class FatFs {
 
   // mkdir
 
-  // getIo
+  async getIo(name) {
+    let io = null;
+    await this.#list(entry => {
+      if (io || entry.directory || entry.name != name) {
+        return;
+      }
+      io = new FatFsIo({
+        name: entry.name,
+        size: entry.size,
+        lastModified: entry.modified,
+        startCluster: entry.cluster,
+        bytesPerCluster: this.#bytesPerSector * this.#sectorPerCluster,
+        getFat: this.#getFat.bind(this),
+        readClusters: this.#readClusters.bind(this)
+      });
+    }, true);
+    return io;
+  }
 
   async getAttributes() {
     return {
