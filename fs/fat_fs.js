@@ -186,6 +186,7 @@ export class FatFs {
   }
 
   async chdir(name) {
+    let found = false;
     await this.#list(async entry => {
       if (!entry.directory || entry.name != name) {
         return;
@@ -210,7 +211,11 @@ export class FatFs {
       } else {
         this.#path.push(name);
       }
+      found = true;
     }, true);
+    if (!found) {
+      throw Error.createNotFound();
+    }
   }
 
   async mkdir(name) {
@@ -222,11 +227,13 @@ export class FatFs {
   }
 
   async getIo(name, options) {
-    // TODO: optioons.create.
     let io = null;
     await this.#list(entry => {
       if (io || entry.directory || entry.name != name) {
         return;
+      }
+      if (options && options.create) {
+        throw Error.createInvalidRequest('already exist');
       }
       io = new FatFsIo({
         name: entry.name,

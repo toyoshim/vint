@@ -18,13 +18,17 @@ export class Error {
   static createNotImplemented(hint) {
     return new Error(Error.notImplemented, hint);
   }
+  static createNotFound(hint) {
+    return new Error(Error.notFound, hint);
+  }
 
+  static notImplemented = -1;
   static unknown = 0;
   static notOpen = 1;
   static invalidBuffer = 2;
   static invalidRequest = 3;
   static invalidFormat = 4;
-  static notImplemented = 5;
+  static notFound = 5;
 
   #id = Error.unknown;
   #hint = '';

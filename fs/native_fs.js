@@ -34,14 +34,14 @@ export class NativeFs {
   async chdir(name) {
     if (name == '..') {
       if (this.#parentHandles.length == 0) {
-        throw Error.createInvalidRequest();
+        throw Error.createNotFound();
       }
       this.#handle = this.#parentHandles.pop();
       this.#path.pop();
     } else {
       const handle = await this.#handle.getDirectoryHandle(name);
       if (!handle) {
-        throw Error.createInvalidRequest();
+        throw Error.createNotFound();
       }
       this.#path.push(name);
       this.#parentHandles.push(this.#handle);
