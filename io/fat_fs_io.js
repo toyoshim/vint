@@ -52,7 +52,8 @@ export class FatFsIo {
         this.#data = null;
       }
       if (!this.#data) {
-        this.#data = await this.#options.readClusters(this.#cluster, 1);
+        const clusters = await this.#options.readClusters(this.#cluster, 1);
+        this.#data = clusters ? clusters.data : null;
         if (!this.#data || this.#data.byteLength == 0) {
           return null;
         }

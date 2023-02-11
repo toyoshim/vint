@@ -5,6 +5,12 @@
 import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
+// TODO:
+//  1. create a new file with no data.
+//  2. remove the created file.
+//  3. create a new directory.
+//  4. remove the directory.
+
 function getAscii(buffer, offset, size) {
   const end = offset + size;
   const chars = [];
@@ -243,7 +249,7 @@ export class FatFs {
   }
 
   async #list(observer, showPrivate) {
-    const entry = await this.#readDirectoryEntries();
+    const entry = (await this.#readDirectoryEntries()).data;
     for (let index = 0; index < this.#rootEntryCount; ++index) {
       const firstEntry = entry[32 * index];
       if (firstEntry == 0xe5) {
@@ -319,11 +325,13 @@ export class FatFs {
     const buffer =
       new ArrayBuffer(this.#bytesPerSector * this.#sectorPerCluster * count);
     const dst = new Uint8Array(buffer);
+    const sectors = [];
     for (let i = 0; i < count; ++i) {
       const sector =
         this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
       for (let j = 0; j < this.#sectorPerCluster; ++j) {
         const src = new Uint8Array(await this.#image.read(sector + j));
+        sectors.push(sector + j);
         const offset = this.#bytesPerSector * (i * this.#sectorPerCluster + j);
         for (let k = 0; k < this.#bytesPerSector; ++k) {
           dst[offset + k] = src[k];
@@ -331,14 +339,21 @@ export class FatFs {
       }
       cluster = this.#getFat(cluster);
     }
-    return dst;
+    return { data: dst, sectors: sectors };
   }
 
   async #readDirectoryEntries() {
     if (this.#currentDirectoryStartCluster == 0) {
-      return await this.#readSectors(
-        this.#rootDirectoryStartSector,
-        this.#rootDirectorySectors);
+      const sectors = [];
+      for (let i = 0; i < this.#rootDirectorySectors; ++i) {
+        sectors.push(this.#rootDirectoryStartSector + i);
+      }
+      return {
+        data: await this.#readSectors(
+          this.#rootDirectoryStartSector,
+          this.#rootDirectorySectors),
+        sectors: sectors
+      };
     } else {
       return await this.#readClusters(
         this.#currentDirectoryStartCluster,
