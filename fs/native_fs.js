@@ -9,8 +9,9 @@ export class NativeFs {
   #parentHandles = [];
   #path = [];
 
-  async choose() {
-    this.#handle = await window.showDirectoryPicker();
+  async choose(writeAccess) {
+    const options = writeAccess ? { mode: 'readwrite' } : undefined;
+    this.#handle = await window.showDirectoryPicker(options);
   }
 
   async list(observer) {
@@ -48,7 +49,20 @@ export class NativeFs {
   }
 
   async mkdir(name) {
-    throw Error.createNotImplemented();
+    try {
+      const handle = await this.#handle.getDirectoryHandle(name);
+      if (handle) {
+        throw Error.createInvalidRequest('already exist');
+      }
+    } catch (e) { }
+    const handle = await this.#handle.getDirectoryHandle(name, { create: true });
+    if (!handle) {
+      throw Error.createInvalidRequest('cannot create');
+    }
+  }
+
+  async remove(name) {
+    await this.#handle.removeEntry(name);
   }
 
   async getIo(name, options) {

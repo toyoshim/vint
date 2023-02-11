@@ -3,14 +3,14 @@
 // in the LICENSE file.
 
 export class Error {
-  static createNotOpen() {
-    return new Error(Error.notOpen);
+  static createNotOpen(hint) {
+    return new Error(Error.notOpen, hint);
   }
-  static createInvalidBuffer() {
-    return new Error(Error.invalidBuffer);
+  static createInvalidBuffer(hint) {
+    return new Error(Error.invalidBuffer, hint);
   }
-  static createInvalidRequest() {
-    return new Error(Error.invalidRequest);
+  static createInvalidRequest(hint) {
+    return new Error(Error.invalidRequest, hint);
   }
   static createInvalidFormat(hint) {
     return new Error(Error.invalidFormat, hint);

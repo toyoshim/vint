@@ -207,6 +207,10 @@ export class FatFs {
     // TODO
   }
 
+  async remove(name) {
+    // TODO
+  }
+
   async getIo(name, options) {
     // TODO: optioons.create.
     let io = null;

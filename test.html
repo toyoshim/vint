@@ -65,6 +65,10 @@
     await nfs.list(entry => {
       console.log(entry);
     });
+    await nfs.mkdir('test');
+    await nfs.remove('test');
+    await nfs.remove('pae');
+    await nfs.remove('pae');
   });
 </script>
 
