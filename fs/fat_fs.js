@@ -386,10 +386,11 @@ export class FatFs {
   }
 
   async #list(observer, showPrivate) {
-    const entry = (await this.#readDirectoryEntries()).data;
+    const directoryEntry = await this.#readDirectoryEntries();
+    const directory = directoryEntry.data;
     const isHuman = this.#oemName.startsWith('X68');
     for (let index = 0; index < this.#rootEntryCount; ++index) {
-      const firstEntry = entry[32 * index];
+      const firstEntry = directory[32 * index];
       if (firstEntry == 0xe5) {
         // Deleted entry.
         continue;
@@ -397,22 +398,22 @@ export class FatFs {
         // No more entry.
         break;
       }
-      const name = getEntryName(entry, 32 * index);
-      const attributes = entry[32 * index + 11];
+      const name = getEntryName(directory, 32 * index);
+      const attributes = directory[32 * index + 11];
       if ((attributes & 0x08) && !showPrivate) {
         // Volume entry is private.
         continue;
       }
       const created = isHuman ? undefined : getTimestamp(
-        getShort(entry, 32 * index + 16),
-        getShort(entry, 32 * index + 14),
-        entry[32 * index + 13]
+        getShort(directory, 32 * index + 16),
+        getShort(directory, 32 * index + 14),
+        directory[32 * index + 13]
       );
       const accessed = isHuman ? undefined : getTimestamp(
-        getShort(entry, 32 * index + 18));
+        getShort(directory, 32 * index + 18));
       const modified = getTimestamp(
-        getShort(entry, 32 * index + 24),
-        getShort(entry, 32 * index + 22)
+        getShort(directory, 32 * index + 24),
+        getShort(directory, 32 * index + 22)
       );
       const data = {
         name: name,
@@ -425,7 +426,7 @@ export class FatFs {
         created: created,
         accessed: accessed,
         modified: modified,
-        size: getLong(entry, 32 * index + 28)
+        size: getLong(directory, 32 * index + 28)
       };
       if (window.Encoding) {
         data.nameArray = data.name;
@@ -439,9 +440,11 @@ export class FatFs {
         data.name = data.name.join('');
       }
       if (showPrivate) {
-        const clusterHigh = isHuman ? 0 : getShort(entry, 32 * index + 20);
-        const clusterLow = getShort(entry, 32 * index + 26);
+        const clusterHigh = isHuman ? 0 : getShort(directory, 32 * index + 20);
+        const clusterLow = getShort(directory, 32 * index + 26);
         data.cluster = (clusterHigh << 16) | clusterLow;
+        data.index = index;
+        data.directoryEntry = directoryEntry;
       }
       observer(data);
     }
