@@ -1,4 +1,8 @@
 <html>
+
+<head>
+  <meta charset="" utf-8">
+</head>
 <button id="run">Run</button>
 <script src="third_party/encoding.js"></script>
 <script type="module">
@@ -7,6 +11,7 @@
   import { XdfImage } from "./image/xdf_image.js"
   import { NativeIo } from "./io/native_io.js"
 
+  /*
   const io = new NativeIo();
   const out = new NativeIo();
   document.getElementById('run').addEventListener('click', async e => {
@@ -42,16 +47,25 @@
     }
     out.close();
   });
+  */
 
-  /*
   const nfs = new NativeFs();
   document.getElementById('run').addEventListener('click', async e => {
     await nfs.choose();
+    console.log(await nfs.getAttributes());
+    let name = '';
+    await nfs.list(entry => {
+      console.log(entry);
+      if (entry.directory) {
+        name = entry.name;
+      }
+    });
+    await nfs.chdir(name);
+    console.log(await nfs.getCwd());
     await nfs.list(entry => {
       console.log(entry);
     });
   });
-  */
 </script>
 
 </html>

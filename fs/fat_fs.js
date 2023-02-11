@@ -203,9 +203,12 @@ export class FatFs {
     }, true);
   }
 
-  // mkdir
+  async mkdir(name) {
+    // TODO
+  }
 
-  async getIo(name) {
+  async getIo(name, options) {
+    // TODO: optioons.create.
     let io = null;
     await this.#list(entry => {
       if (io || entry.directory || entry.name != name) {
@@ -227,7 +230,7 @@ export class FatFs {
   async getAttributes() {
     return {
       encoding: 'Shift_JIS',
-      volumeLevel: this.#volumeLabel
+      volumeLabel: this.#volumeLabel
     };
   }
 
