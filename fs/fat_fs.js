@@ -131,6 +131,25 @@ function getTimestamp(date, time, subtime) {
   return timestamp;
 }
 
+function createCurrentTimestamp() {
+  const now = new Date();
+  const date =
+    ((now.getFullYear() - 1980) << 9) |
+    ((now.getMonth() + 1) << 5) |
+    now.getDate();
+  const time =
+    (now.getHours() << 11) |
+    (now.getMinutes() << 5) |
+    (now.getSeconds() >> 1);
+  const subtime =
+    (now.getSeconds() & 1) * 100 + (now.getMilliseconds() / 100) | 0;
+  return {
+    date: date,
+    time: time,
+    subtime: subtime
+  };
+}
+
 function countBlock(n, block) {
   return ((n + block - 1) / block) | 0;
 }
@@ -309,6 +328,7 @@ export class FatFs {
         // TODO: expand for non-root directory.
         throw Error.createNoSpace();
       }
+      // TODO
       throw Error.createNotImplemented();
     }
     if (!io) {
