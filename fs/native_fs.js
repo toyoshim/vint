@@ -17,12 +17,12 @@ export class NativeFs {
 
   async list(observer) {
     if (this.#parentHandles.length != 0) {
-      this.#notifyEntry(observer, '..', true, null, 0);
+      await this.#notifyEntry(observer, '..', true, null, 0);
     }
     for await (let [name, handle] of this.#handle) {
       const isFile = handle.kind == 'file';
       const file = isFile ? await handle.getFile() : null;
-      this.#notifyEntry(
+      await this.#notifyEntry(
         observer,
         name,
         handle.kind == 'directory',
@@ -93,6 +93,15 @@ export class NativeFs {
     return io;
   }
 
+  async flush() {
+  }
+
+  async close() {
+    this.#handle = null;
+    this.#parentHandles = [];
+    this.#path = [];
+  }
+
   async getAttributes() {
     return {
       encoding: 'UCS-16',
@@ -104,8 +113,8 @@ export class NativeFs {
     return '/' + this.#path.join('/');
   }
 
-  #notifyEntry(observer, name, directory, modified, size) {
-    observer({
+  async #notifyEntry(observer, name, directory, modified, size) {
+    await observer({
       name: name,
       writable: true,
       readable: true,

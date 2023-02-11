@@ -6,11 +6,10 @@ import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
 // TODO:
-//  1. remove the created file.
-//  2. create a new directory.
-//  3. remove the directory.
-//  4. expand dirent case.
-//  5. remove a file with content.
+//  1. create a new directory.
+//  2. remove the directory.
+//  3. expand dirent case.
+//  4. remove a file with content.
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -254,12 +253,14 @@ export class FatFs {
     }
     this.#image = image;
     this.#fat = await this.#readSectors(this.#fatStartSector, this.#fatSectors);
-    await this.#list(entry => {
+    await this.#list(async entry => {
       if (!entry.volume) {
-        return;
+        return false;
       }
       this.#volumeLabel = entry.name;
+      return true;
     }, true);
+    this.#path = [];
   }
 
   async list(observer) {
@@ -270,14 +271,17 @@ export class FatFs {
     let found = false;
     await this.#list(async entry => {
       if (!entry.directory || entry.name != name) {
-        return;
+        return false;
       }
       if (entry.cluster == 0) {
+        // Root directory.
         this.#currentDirectoryStartCluster = 0;
         this.#currentDirectoryClusters = 0;
         this.#path = [];
-        return;
+        found = true;
+        return true;
       }
+      // Sub directory.
       let size = 0;
       for (let cluster = entry.cluster; cluster != 0xfff; size++) {
         cluster = await this.#getFat(cluster);
@@ -293,6 +297,7 @@ export class FatFs {
         this.#path.push(name);
       }
       found = true;
+      return true;
     }, true);
     if (!found) {
       throw Error.createNotFound();
@@ -304,28 +309,53 @@ export class FatFs {
   }
 
   async remove(name) {
-    // TODO
+    let found = false;
+    await this.#list(async entry => {
+      if (entry.name != name) {
+        return false;
+      }
+      if (entry.directory) {
+        throw Error.createNotImplemented();
+      } else {
+        // Remove a file.
+        if (entry.size) {
+          // TODO: release sectors.
+          throw Error.createNotImplemented();
+        }
+        const offset = entry.index * 32;
+        entry.directoryEntry.data[offset] = 0xe5;
+        const index = (offset / this.#bytesPerSector) | 0;
+        const start = index * this.#bytesPerSector;
+        const end = start + this.#bytesPerSector;
+        await this.#image.write(
+          entry.directoryEntry.sectors[index],
+          entry.directoryEntry.data.slice(start, end).buffer
+        );
+      }
+      found = true;
+      return true;
+    }, true);
+    if (!found) {
+      throw Error.createNotFound();
+    }
   }
 
   async getIo(name, options) {
     let io = null;
-    await this.#list(entry => {
+    await this.#list(async entry => {
       if (io || entry.directory || entry.name != name) {
-        return;
+        return false;
       }
       if (options && options.create) {
         throw Error.createInvalidRequest('already exist');
       }
-      io = new FatFsIo({
+      io = new FatFsIo(this.#appendIoAttributes({
         name: entry.name,
         size: entry.size,
         lastModified: entry.modified,
-        startCluster: entry.cluster,
-        bytesPerCluster: this.#bytesPerSector * this.#sectorPerCluster,
-        getFat: this.#getFat.bind(this),
-        readClusters: this.#readClusters.bind(this),
-        flush: this.#flush.bind(this)
-      });
+        startCluster: entry.cluster
+      }));
+      return true;
     }, true);
     if (!io && options && options.create) {
       // Create a new file.
@@ -357,21 +387,26 @@ export class FatFs {
           directory.sectors[i],
           directory.data.slice(start, end).buffer);
       }
-      io = new FatFsIo({
+      io = new FatFsIo(this.#appendIoAttributes({
         name: name,
         size: 0,
         lastModified: result.modified,
-        startCluster: 0,
-        bytesPerCluster: this.#bytesPerSector * this.#sectorPerCluster,
-        getFat: this.#getFat.bind(this),
-        readClusters: this.#readClusters.bind(this),
-        flush: this.#flush.bind(this)
-      });
+        startCluster: 0
+      }));
     }
     if (!io) {
       throw Error.createNotFound();
     }
     return io;
+  }
+
+  async flush() {
+    this.#image.flush();
+  }
+
+  async close() {
+    this.flush();
+    this.#image = null;
   }
 
   async getAttributes() {
@@ -446,7 +481,10 @@ export class FatFs {
         data.index = index;
         data.directoryEntry = directoryEntry;
       }
-      observer(data);
+      const stop = await observer(data);
+      if (stop) {
+        break;
+      }
     }
   }
 
@@ -518,10 +556,6 @@ export class FatFs {
     }
   }
 
-  async #flush() {
-    this.#image.flush();
-  }
-
   async #updateEntry(directory, index, entry) {
     const offset = index * 32;
     const data = directory.data;
@@ -558,5 +592,13 @@ export class FatFs {
     directory.dirty[(offset / this.#bytesPerSector) | 0] = true;
 
     return { modified: modified.now };
+  }
+
+  #appendIoAttributes(object) {
+    object.bytesPerCluster = this.#bytesPerSector * this.#sectorPerCluster;
+    object.getFat = this.#getFat.bind(this);
+    object.readClusters = this.#readClusters.bind(this);
+    object.flush = this.flush.bind(this);
+    return object;
   }
 }
