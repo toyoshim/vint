@@ -21,6 +21,12 @@ export class Error {
   static createNotFound(hint) {
     return new Error(Error.notFound, hint);
   }
+  static createNoSpace(hint) {
+    return new Error(Error.noSpace, hint);
+  }
+  static createInvalidName(hint) {
+    return new Error(Error.invalidName, hint);
+  }
 
   static notImplemented = -1;
   static unknown = 0;
@@ -29,6 +35,8 @@ export class Error {
   static invalidRequest = 3;
   static invalidFormat = 4;
   static notFound = 5;
+  static noSpace = 6;
+  static invalidName = 7;
 
   #id = Error.unknown;
   #hint = '';

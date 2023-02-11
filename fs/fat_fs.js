@@ -28,8 +28,7 @@ function getLong(buffer, offset) {
   return (getShort(buffer, offset + 2) << 16) | getShort(buffer, offset);
 }
 
-function getEntryName(buffer, index) {
-  const offset = index * 32;
+function getEntryName(buffer, offset) {
   const chars = [];
   for (let i = 0; i < 8; ++i) {
     if (buffer[offset + i] == 0x20) {
@@ -60,6 +59,55 @@ function getEntryName(buffer, index) {
   return chars;
 }
 
+function createEntryName(name) {
+  let nameArray = null;
+  if (window.Encoding) {
+    nameArray = Encoding.convert(Encoding.stringToCode(name), {
+      to: 'SJIS',
+      from: 'UNICODE'
+    });
+  } else {
+    nameArray = [];
+    for (let c of name) {
+      nameArray.push(c.charCodeAt(0));
+    }
+  }
+  let dotIndex = -1;
+  for (let i = nameArray.length - 1; i >= 0; --i) {
+    if (nameArray[i] == 0x2e) {
+      dotIndex = i;
+      break;
+    }
+  }
+  const extLength = nameArray.length - dotIndex - 1;
+  let extArray = null;
+  let baseArray = null;
+  if (dotIndex >= 0 && extLength <= 3) {
+    extArray = nameArray.slice(dotIndex + 1);
+    baseArray = nameArray.slice(0, dotIndex);
+  } else {
+    extArray = [];
+    baseArray = nameArray;
+  }
+  if (baseArray[0] == 0xe5) {
+    baseArray[0] = 0x05;
+  }
+  if (baseArray.length > 17) {
+    throw Error.createInvalidName('too long: ' + name);
+  }
+  for (let i = baseArray.length; i < 17; ++i) {
+    baseArray[i] = 0x20;
+  }
+  for (let i = extArray.length; i < 3; ++i) {
+    extArray[i] = 0x20;
+  }
+  return {
+    base: baseArray.slice(0, 8),
+    ext: extArray,
+    human: baseArray.slice(8, 17)
+  };
+}
+
 function getTimestamp(date, time, subtime) {
   const year = 1980 + (date >> 9);
   const month = (date >> 5) & 15;
@@ -85,6 +133,15 @@ function getTimestamp(date, time, subtime) {
 
 function countBlock(n, block) {
   return ((n + block - 1) / block) | 0;
+}
+
+function findAvailableEntry(entry) {
+  for (let offset = 0; offset < entry.byteLength; offset += 32) {
+    if (entry[offset] == 0xe5 || entry[offset] == 0) {
+      return offset / 32;
+    }
+  }
+  return -1;
 }
 
 export class FatFs {
@@ -245,6 +302,18 @@ export class FatFs {
         readClusters: this.#readClusters.bind(this)
       });
     }, true);
+    if (!io && options && options.create) {
+      const entry = await this.#readDirectoryEntries();
+      const index = findAvailableEntry(entry.data);
+      if (index < 0) {
+        // TODO: expand for non-root directory.
+        throw Error.createNoSpace();
+      }
+      throw Error.createNotImplemented();
+    }
+    if (!io) {
+      throw Error.createNotFound();
+    }
     return io;
   }
 
@@ -270,7 +339,7 @@ export class FatFs {
         // No more entry.
         break;
       }
-      const name = getEntryName(entry, index);
+      const name = getEntryName(entry, 32 * index);
       const attributes = entry[32 * index + 11];
       if ((attributes & 0x08) && !showPrivate) {
         // Volume entry is private.

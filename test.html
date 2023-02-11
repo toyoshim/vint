@@ -12,10 +12,10 @@
   import { NativeIo } from "./io/native_io.js"
 
   const io = new NativeIo();
-  const out = new NativeIo();
+  //const out = new NativeIo();
   document.getElementById('run').addEventListener('click', async e => {
     await io.choose();
-    await out.choose();
+    //await out.choose();
     const xdf = new XdfImage();
     await xdf.open(io);
     const fat = new FatFs();
@@ -24,6 +24,7 @@
     await fat.list(entry => {
       console.log(entry);
     });
+    /*
     await fat.chdir('SYS');
     console.log(await fat.getCwd());
     await fat.list(entry => {
@@ -34,6 +35,9 @@
     await fat.list(entry => {
       console.log(entry);
     });
+    */
+    const newFile = await fat.getIo('NEW', { create: true });
+    /*
     const file = await fat.getIo('AUTOEXEC.BAT');
     console.log(file);
     while (true) {
@@ -45,6 +49,7 @@
       await out.write(data);
     }
     out.close();
+    */
   });
 </script>
 
