@@ -90,6 +90,11 @@ export class NativeIo {
     this.#file = await this.#handle.getFile();
   }
 
+  async open(handle) {
+    this.#handle = handle;
+    this.#file = await this.#handle.getFile();
+  }
+
   async #requestWriteAccess() {
     this.#writableStream = await this.#handle.createWritable({
       keepExistingData: true

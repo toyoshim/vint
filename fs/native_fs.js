@@ -3,6 +3,7 @@
 // in the LICENSE file.
 
 import { Error } from "../error.js"
+import { NativeIo } from "../io/native_io.js"
 
 export class NativeFs {
   #handle = null;
@@ -54,7 +55,11 @@ export class NativeFs {
       if (handle) {
         throw Error.createInvalidRequest('already exist');
       }
-    } catch (e) { }
+    } catch (e) {
+      if (e instanceof Error) {
+        throw e;
+      }
+    }
     const handle = await this.#handle.getDirectoryHandle(name, { create: true });
     if (!handle) {
       throw Error.createInvalidRequest('cannot create');
@@ -66,7 +71,26 @@ export class NativeFs {
   }
 
   async getIo(name, options) {
-    throw Error.createNotImplemented();
+    try {
+      const handle = await this.#handle.getFileHandle(name);
+      if (!options || !options.create) {
+        const io = new NativeIo();
+        await io.open(handle);
+        return io;
+      }
+      throw Error.createInvalidRequest('already exist');
+    } catch (e) {
+      if (e instanceof Error) {
+        throw e;
+      }
+    }
+    if (!options || !options.create) {
+      throw Error.createInvalidRequest('not found');
+    }
+    const handle = await this.#handle.getFileHandle(name, { create: true });
+    const io = new NativeIo();
+    await io.open(handle);
+    return io;
   }
 
   async getAttributes() {

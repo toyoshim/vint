@@ -60,15 +60,16 @@
         name = entry.name;
       }
     });
-    await nfs.chdir(name);
-    console.log(await nfs.getCwd());
-    await nfs.list(entry => {
-      console.log(entry);
-    });
-    await nfs.mkdir('test');
-    await nfs.remove('test');
-    await nfs.remove('pae');
-    await nfs.remove('pae');
+    const a = await nfs.getIo('USER.XDF');
+    const b = await nfs.getIo('COPY', { create: true });
+    while (true) {
+      const buffer = await a.read(1024);
+      if (!buffer || buffer.byteLength == 0) {
+        break;
+      }
+      await b.write(buffer);
+    }
+    await b.close();
   });
 </script>
 
