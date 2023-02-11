@@ -35,7 +35,11 @@ function getEntryName(buffer, index) {
     if (buffer[offset + i] == 0x20) {
       break;
     }
-    chars.push(buffer[offset + i]);
+    if (i == 0 && (buffer[offset] == 0x05)) {
+      chars.push(0xe5);
+    } else {
+      chars.push(buffer[offset + i]);
+    }
   }
   // Human68k extension.
   for (let i = 12; i < 21; ++i) {
