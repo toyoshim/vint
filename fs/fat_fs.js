@@ -6,10 +6,11 @@ import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
 // TODO:
-//  1. create a new file with no data.
-//  2. remove the created file.
-//  3. create a new directory.
-//  4. remove the directory.
+//  1. remove the created file.
+//  2. create a new directory.
+//  3. remove the directory.
+//  4. expand dirent case.
+//  5. remove a file with content.
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -95,8 +96,11 @@ function createEntryName(name) {
   if (baseArray.length > 17) {
     throw Error.createInvalidName('too long: ' + name);
   }
-  for (let i = baseArray.length; i < 17; ++i) {
+  for (let i = baseArray.length; i < 8; ++i) {
     baseArray[i] = 0x20;
+  }
+  for (let i = baseArray.length; i < 17; ++i) {
+    baseArray[i] = 0x00;
   }
   for (let i = extArray.length; i < 3; ++i) {
     extArray[i] = 0x20;
@@ -131,8 +135,8 @@ function getTimestamp(date, time, subtime) {
   return timestamp;
 }
 
-function createCurrentTimestamp() {
-  const now = new Date();
+function createTimestamp(optionalDate) {
+  const now = optionalDate || new Date();
   const date =
     ((now.getFullYear() - 1980) << 9) |
     ((now.getMonth() + 1) << 5) |
@@ -146,7 +150,8 @@ function createCurrentTimestamp() {
   return {
     date: date,
     time: time,
-    subtime: subtime
+    subtime: subtime,
+    now: now
   };
 }
 
@@ -318,18 +323,50 @@ export class FatFs {
         startCluster: entry.cluster,
         bytesPerCluster: this.#bytesPerSector * this.#sectorPerCluster,
         getFat: this.#getFat.bind(this),
-        readClusters: this.#readClusters.bind(this)
+        readClusters: this.#readClusters.bind(this),
+        flush: this.#flush.bind(this)
       });
     }, true);
     if (!io && options && options.create) {
-      const entry = await this.#readDirectoryEntries();
-      const index = findAvailableEntry(entry.data);
+      // Create a new file.
+      const directory = await this.#readDirectoryEntries();
+      const index = findAvailableEntry(directory.data);
       if (index < 0) {
         // TODO: expand for non-root directory.
         throw Error.createNoSpace();
       }
-      // TODO
-      throw Error.createNotImplemented();
+      const entry = createEntryName(name);
+      entry.directory = false;
+      entry.writable =
+        (options.writable !== undefined) ? options.writable : true;
+      entry.readable =
+        (options.readable !== undefined) ? options.readable : true;
+      entry.system =
+        (options.system !== undefined) ? options.system : false;
+      entry.created = options.created;
+      entry.accessed = options.accessed;
+      entry.modified = options.modified;
+      const result = this.#updateEntry(directory, index, entry);
+      for (let i = 0; i < directory.dirty.length; ++i) {
+        if (!directory.dirty[i]) {
+          continue;
+        }
+        const start = i * this.#bytesPerSector;
+        const end = start + this.#bytesPerSector;
+        await this.#image.write(
+          directory.sectors[i],
+          directory.data.slice(start, end).buffer);
+      }
+      io = new FatFsIo({
+        name: name,
+        size: 0,
+        lastModified: result.modified,
+        startCluster: 0,
+        bytesPerCluster: this.#bytesPerSector * this.#sectorPerCluster,
+        getFat: this.#getFat.bind(this),
+        readClusters: this.#readClusters.bind(this),
+        flush: this.#flush.bind(this)
+      });
     }
     if (!io) {
       throw Error.createNotFound();
@@ -350,6 +387,7 @@ export class FatFs {
 
   async #list(observer, showPrivate) {
     const entry = (await this.#readDirectoryEntries()).data;
+    const isHuman = this.#oemName.startsWith('X68');
     for (let index = 0; index < this.#rootEntryCount; ++index) {
       const firstEntry = entry[32 * index];
       if (firstEntry == 0xe5) {
@@ -365,12 +403,13 @@ export class FatFs {
         // Volume entry is private.
         continue;
       }
-      const created = getTimestamp(
+      const created = isHuman ? undefined : getTimestamp(
         getShort(entry, 32 * index + 16),
         getShort(entry, 32 * index + 14),
         entry[32 * index + 13]
       );
-      const accessed = getTimestamp(getShort(entry, 32 * index + 18));
+      const accessed = isHuman ? undefined : getTimestamp(
+        getShort(entry, 32 * index + 18));
       const modified = getTimestamp(
         getShort(entry, 32 * index + 24),
         getShort(entry, 32 * index + 22)
@@ -400,7 +439,7 @@ export class FatFs {
         data.name = data.name.join('');
       }
       if (showPrivate) {
-        const clusterHigh = getShort(entry, 32 * index + 20);
+        const clusterHigh = isHuman ? 0 : getShort(entry, 32 * index + 20);
         const clusterLow = getShort(entry, 32 * index + 26);
         data.cluster = (clusterHigh << 16) | clusterLow;
       }
@@ -426,12 +465,14 @@ export class FatFs {
       new ArrayBuffer(this.#bytesPerSector * this.#sectorPerCluster * count);
     const dst = new Uint8Array(buffer);
     const sectors = [];
+    const dirty = [];
     for (let i = 0; i < count; ++i) {
       const sector =
         this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
       for (let j = 0; j < this.#sectorPerCluster; ++j) {
         const src = new Uint8Array(await this.#image.read(sector + j));
         sectors.push(sector + j);
+        dirty.push(false);
         const offset = this.#bytesPerSector * (i * this.#sectorPerCluster + j);
         for (let k = 0; k < this.#bytesPerSector; ++k) {
           dst[offset + k] = src[k];
@@ -439,20 +480,23 @@ export class FatFs {
       }
       cluster = this.#getFat(cluster);
     }
-    return { data: dst, sectors: sectors };
+    return { data: dst, sectors: sectors, dirty: dirty };
   }
 
   async #readDirectoryEntries() {
     if (this.#currentDirectoryStartCluster == 0) {
       const sectors = [];
+      const dirty = [];
       for (let i = 0; i < this.#rootDirectorySectors; ++i) {
         sectors.push(this.#rootDirectoryStartSector + i);
+        dirty.push(false);
       }
       return {
         data: await this.#readSectors(
           this.#rootDirectoryStartSector,
           this.#rootDirectorySectors),
-        sectors: sectors
+        sectors: sectors,
+        dirty: dirty
       };
     } else {
       return await this.#readClusters(
@@ -469,5 +513,47 @@ export class FatFs {
       const offset = (cluster * 1.5) | 0;
       return ((this.#fat[offset + 1] & 0x0f) << 8) | this.#fat[offset];
     }
+  }
+
+  async #flush() {
+    this.#image.flush();
+  }
+
+  async #updateEntry(directory, index, entry) {
+    const offset = index * 32;
+    const data = directory.data;
+    for (let i = 0; i < 8; ++i) {
+      data[offset + i] = entry.base[i];
+    }
+    for (let i = 0; i < 3; ++i) {
+      data[offset + 8 + i] = entry.ext[i];
+    }
+    data[offset + 11] =
+      (entry.writable ? 0x00 : 0x01) |
+      (entry.readable ? 0x00 : 0x02) |
+      (entry.system ? 0x04 : 0x00) |
+      (entry.directory ? 0x10 : 0x00);
+    for (let i = 0; i < 9; ++i) {
+      data[offset + 12 + i] = entry.human[i];
+    }
+    const modified = createTimestamp(entry.modified);
+    data[offset + 22] = modified.time & 0xff;
+    data[offset + 23] = (modified.time >> 8) & 0xff;
+    data[offset + 24] = modified.date & 0xff;
+    data[offset + 25] = (modified.date >> 8) & 0xff;
+
+    // cluster is not assigned.
+    data[offset + 26] = 0;
+    data[offset + 27] = 0;
+
+    // size starts with 0.
+    data[offset + 28] = 0;
+    data[offset + 29] = 0;
+    data[offset + 30] = 0;
+    data[offset + 31] = 0;
+
+    directory.dirty[(offset / this.#bytesPerSector) | 0] = true;
+
+    return { modified: modified.now };
   }
 }

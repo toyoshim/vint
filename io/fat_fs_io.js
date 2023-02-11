@@ -77,10 +77,15 @@ export class FatFsIo {
   }
 
   async flush() {
-    throw Error.createNotImplemented('flush');
+    await this.#options.flush();
   }
 
   async close() {
-    throw Error.createNotImplemented('close');
+    await this.#options.flush();
+    this.#options = null;
+    this.#offset = 0;
+    this.#cluster = 0;
+    this.#clusterOffset = 0;
+    this.#data = null;
   }
 } 

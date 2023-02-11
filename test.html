@@ -37,6 +37,7 @@
     });
     */
     const newFile = await fat.getIo('NEW', { create: true });
+    newFile.close();
     /*
     const file = await fat.getIo('AUTOEXEC.BAT');
     console.log(file);

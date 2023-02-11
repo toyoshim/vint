@@ -4,6 +4,8 @@
 
 import { Error } from "../error.js"
 
+const sectorSize = 1024;
+
 export class XdfImage {
   #io = null;
 
@@ -22,9 +24,20 @@ export class XdfImage {
     if (!this.#io) {
       throw Error.createNotOpen();
     }
-    const sectorSize = 1024;
     await this.#io.seek(sector * sectorSize);
     return await this.#io.read(sectorSize);
+  }
+
+  async write(sector, data) {
+    if (!this.#io) {
+      throw Error.createNotOpen();
+    }
+    await this.#io.seek(sector * sectorSize);
+    return await this.#io.write(data);
+  }
+
+  async flush() {
+    await this.#io.flush();
   }
 
   async getAttributes() {
