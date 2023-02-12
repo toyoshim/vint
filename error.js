@@ -27,6 +27,9 @@ export class Error {
   static createInvalidName(hint) {
     return new Error(Error.invalidName, hint);
   }
+  static createNotEmpty(hint) {
+    return new Error(Error.notEmpty, hint);
+  }
 
   static notImplemented = -1;
   static unknown = 0;
@@ -37,6 +40,7 @@ export class Error {
   static notFound = 5;
   static noSpace = 6;
   static invalidName = 7;
+  static notEmpty = 8;
 
   #id = Error.unknown;
   #hint = '';

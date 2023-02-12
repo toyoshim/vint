@@ -6,9 +6,8 @@ import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
 // TODO:
-//  1. remove the directory.
-//  2. expand dirent case.
-//  3. remove a file with content.
+//  - expand dirent case.
+//  - remove a file with content.
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -266,45 +265,50 @@ export class FatFs {
     }
     this.#image = image;
     this.#fat = await this.#readSectors(this.#fatStartSector, this.#fatSectors);
-    await this.#list(async entry => {
-      if (!entry.volume) {
-        return false;
-      }
-      this.#volumeLabel = entry.name;
-      return true;
-    }, true);
+    await this.#list(
+      await this.#readDirectoryEntries(),
+      async entry => {
+        if (!entry.volume) {
+          return false;
+        }
+        this.#volumeLabel = entry.name;
+        return true;
+      }, true);
     this.#path = [];
   }
 
   async list(observer) {
-    await this.#list(observer, true);
+    await this.#list(await this.#readDirectoryEntries(), observer, true);
   }
 
   async chdir(name) {
     let found = false;
-    await this.#list(async entry => {
-      if (!entry.directory || entry.name != name) {
-        return false;
-      }
-      if (entry.cluster == 0) {
-        // Root directory.
-        this.#currentDirectoryStartCluster = 0;
-        this.#currentDirectoryClusters = 0;
-        this.#path = [];
+    await this.#list(
+      await this.#readDirectoryEntries(),
+      async entry => {
+        if (!entry.directory || entry.name != name) {
+          return false;
+        }
+        if (entry.cluster == 0) {
+          // Root directory.
+          this.#currentDirectoryStartCluster = 0;
+          this.#currentDirectoryClusters = 0;
+          this.#path = [];
+          found = true;
+          return true;
+        }
+        // Sub directory.
+        this.#currentDirectoryStartCluster = entry.cluster;
+        this.#currentDirectoryClusters =
+          await this.#countFatLink(entry.cluster);
+        if (name == '..') {
+          this.#path.pop();
+        } else {
+          this.#path.push(name);
+        }
         found = true;
         return true;
-      }
-      // Sub directory.
-      this.#currentDirectoryStartCluster = entry.cluster;
-      this.#currentDirectoryClusters = await this.#countFatLink(entry.cluster);
-      if (name == '..') {
-        this.#path.pop();
-      } else {
-        this.#path.push(name);
-      }
-      found = true;
-      return true;
-    }, true);
+      }, true);
     if (!found) {
       throw Error.createNotFound();
     }
@@ -312,13 +316,15 @@ export class FatFs {
 
   async mkdir(name, options) {
     let found = false;
-    await this.#list(async entry => {
-      if (entry.name != name) {
-        return false;
-      }
-      found = true;
-      return true;
-    });
+    await this.#list(
+      await this.#readDirectoryEntries(),
+      async entry => {
+        if (entry.name != name) {
+          return false;
+        }
+        found = true;
+        return true;
+      });
     if (found) {
       throw Error.createInvalidRequest('already exist');
     }
@@ -370,18 +376,38 @@ export class FatFs {
 
   async remove(name) {
     let found = false;
-    await this.#list(async entry => {
-      if (entry.name != name) {
-        return false;
-      }
-      if (entry.directory) {
-        throw Error.createNotImplemented();
-      } else {
-        // Remove a file.
-        if (entry.size) {
-          // TODO: release sectors.
-          throw Error.createNotImplemented();
+    await this.#list(
+      await this.#readDirectoryEntries(),
+      async entry => {
+        if (entry.name != name) {
+          return false;
         }
+        if (entry.directory) {
+          // Check if the directory is empty.
+          let found = false;
+          await this.#list(
+            await this.#readDirectoryEntries(entry.cluster),
+            async entry => {
+              if (entry.name == '.' || entry.name == '..') {
+                return false;
+              }
+              found = true;
+              return true;
+            }, false);
+          if (found) {
+            throw Error.createNotEmpty();
+          }
+          // Remove a directory.
+          await this.#releaseFat(entry.cluster);
+          await this.#flushFat();
+        } else {
+          // Remove a file.
+          if (entry.size) {
+            // TODO: release sectors.
+            throw Error.createNotImplemented();
+          }
+        }
+        // Remove the entry for the file / directory.
         const offset = entry.index * 32;
         entry.directoryEntry.data[offset] = 0xe5;
         const index = (offset / this.#bytesPerSector) | 0;
@@ -391,10 +417,9 @@ export class FatFs {
           entry.directoryEntry.sectors[index],
           entry.directoryEntry.data.slice(start, end).buffer
         );
-      }
-      found = true;
-      return true;
-    }, true);
+        found = true;
+        return true;
+      }, true);
     if (!found) {
       throw Error.createNotFound();
     }
@@ -402,21 +427,23 @@ export class FatFs {
 
   async getIo(name, options) {
     let io = null;
-    await this.#list(async entry => {
-      if (io || entry.directory || entry.name != name) {
-        return false;
-      }
-      if (options && options.create) {
-        throw Error.createInvalidRequest('already exist');
-      }
-      io = new FatFsIo(this.#appendIoAttributes({
-        name: entry.name,
-        size: entry.size,
-        lastModified: entry.modified,
-        startCluster: entry.cluster
-      }));
-      return true;
-    }, true);
+    await this.#list(
+      await this.#readDirectoryEntries(),
+      async entry => {
+        if (io || entry.directory || entry.name != name) {
+          return false;
+        }
+        if (options && options.create) {
+          throw Error.createInvalidRequest('already exist');
+        }
+        io = new FatFsIo(this.#appendIoAttributes({
+          name: entry.name,
+          size: entry.size,
+          lastModified: entry.modified,
+          startCluster: entry.cluster
+        }));
+        return true;
+      }, true);
     if (!io && options && options.create) {
       // Create a new file.
       const directory = await this.#readDirectoryEntries();
@@ -463,11 +490,10 @@ export class FatFs {
     return '/' + this.#path.join('/');
   }
 
-  async #list(observer, showPrivate) {
-    const directoryEntry = await this.#readDirectoryEntries();
+  async #list(directoryEntry, observer, showPrivate) {
     const directory = directoryEntry.data;
     const isHuman = this.#oemName.startsWith('X68');
-    for (let index = 0; index < this.#rootEntryCount; ++index) {
+    for (let index = 0; index < directoryEntry.entries; ++index) {
       const firstEntry = directory[32 * index];
       if (firstEntry == 0xe5) {
         // Deleted entry.
@@ -571,8 +597,18 @@ export class FatFs {
     return { data: dst, sectors: sectors, dirty: dirty };
   }
 
-  async #readDirectoryEntries() {
-    if (this.#currentDirectoryStartCluster == 0) {
+  async #readDirectoryEntries(cluster) {
+    let startCluster;
+    let clusters;
+    if (cluster) {
+      startCluster = cluster;
+      clusters = await this.#countFatLink(cluster);
+    } else {
+      startCluster = this.#currentDirectoryStartCluster;
+      clusters = this.#currentDirectoryClusters;
+    }
+    if (startCluster == 0) {
+      // Root directory.
       const sectors = [];
       const dirty = [];
       for (let i = 0; i < this.#rootDirectorySectors; ++i) {
@@ -583,13 +619,15 @@ export class FatFs {
         data: (await this.#readSectors(
           this.#rootDirectoryStartSector,
           this.#rootDirectorySectors)).data,
+        entries: this.#rootEntryCount,
         sectors: sectors,
         dirty: dirty
       };
     } else {
-      return await this.#readClusters(
-        this.#currentDirectoryStartCluster,
-        this.#currentDirectoryClusters);
+      // Sub-directory entry.
+      const result = await this.#readClusters(startCluster, clusters);
+      result.entries = result.sectors.length * this.#bytesPerSector / 32;
+      return result;
     }
   }
 
@@ -617,6 +655,14 @@ export class FatFs {
     }
     this.#fat.dirty[(offset / this.#bytesPerSector) | 0] = true;
     this.#fat.dirty[((offset + 1) / this.#bytesPerSector) | 0] = true;
+  }
+
+  async #releaseFat(cluster) {
+    const next = await this.#getFat(cluster);
+    await this.#setFat(cluster, 0);
+    if (2 <= next && next < 0xfff) {
+      await this.#releaseFat(next);
+    }
   }
 
   async #flushFat() {

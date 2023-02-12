@@ -38,7 +38,7 @@
     } catch (e) { console.log(e); }
     //const newFile = await fat.getIo('NEW', { create: true });
     //await fat.mkdir('newdir');
-    //await fat.remove('NEW');
+    await fat.remove('newdir');
     fat.close();
     /*
     const file = await fat.getIo('AUTOEXEC.BAT');
