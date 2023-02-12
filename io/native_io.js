@@ -74,10 +74,7 @@ export class NativeIo {
   }
 
   async close() {
-    if (this.#writableStream) {
-      await this.#writableStream.close();
-      this.#writableStream = null;
-    }
+    this.flush();
     this.#file = null;
     this.#handle = null;
     this.#offset = 0;

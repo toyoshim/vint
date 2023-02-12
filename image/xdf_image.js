@@ -25,7 +25,8 @@ export class XdfImage {
       throw Error.createNotOpen();
     }
     await this.#io.seek(sector * sectorSize);
-    return await this.#io.read(sectorSize);
+    const result = await this.#io.read(sectorSize);
+    return result;
   }
 
   async write(sector, data) {

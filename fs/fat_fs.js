@@ -7,7 +7,6 @@ import { FatFsIo } from "../io/fat_fs_io.js"
 
 // TODO:
 //  - expand dirent case.
-//  - remove a file with content.
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -397,17 +396,13 @@ export class FatFs {
           if (found) {
             throw Error.createNotEmpty();
           }
-          // Remove a directory.
+        }
+        // Remove the sub-directory entry or the file content.
+        if (entry.cluster) {
           await this.#releaseFat(entry.cluster);
           await this.#flushFat();
-        } else {
-          // Remove a file.
-          if (entry.size) {
-            // TODO: release sectors.
-            throw Error.createNotImplemented();
-          }
         }
-        // Remove the entry for the file / directory.
+        // Remove the entry for the file or the directory.
         const offset = entry.index * 32;
         entry.directoryEntry.data[offset] = 0xe5;
         const index = (offset / this.#bytesPerSector) | 0;

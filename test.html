@@ -4,6 +4,7 @@
   <meta charset="" utf-8">
 </head>
 <button id="run">Run</button>
+<button id="test">Test</button>
 <script src="third_party/encoding.js"></script>
 <script type="module">
   import { FatFs } from "./fs/fat_fs.js"
@@ -20,6 +21,12 @@
     await xdf.open(io);
     const fat = new FatFs();
     await fat.open(xdf);
+    document.getElementById('test').addEventListener('click', async e => {
+      await fat.flush();
+      await fat.list(entry => {
+        console.log(entry);
+      });
+    });
     console.log(await fat.getAttributes());
     await fat.list(entry => {
       console.log(entry);
@@ -32,14 +39,23 @@
       });
       await fat.chdir('..');
       console.log(await fat.getCwd());
-      await fat.list(entry => {
-        console.log(entry);
-      });
     } catch (e) { console.log(e); }
     //const newFile = await fat.getIo('NEW', { create: true });
-    //await fat.mkdir('newdir');
-    await fat.remove('newdir');
-    fat.close();
+    console.log('mkdir');
+    await fat.mkdir('newdir');
+    await fat.list(entry => {
+      console.log(entry);
+    });
+    console.log('chdir');
+    await fat.chdir('newdir');
+    console.log(await fat.getCwd());
+    //for (let i = 0; i < 256; ++i) {
+    //  console.log(i);
+    //  await fat.getIo(i.toString(), { create: true });
+    // }
+    //await fat.remove('newdir');
+    //await fat.remove('config.BAK');
+    //fat.close();
     /*
     const file = await fat.getIo('AUTOEXEC.BAT');
     console.log(file);
