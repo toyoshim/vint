@@ -4,17 +4,51 @@
 
 import { Error } from "../error.js"
 
+class StoreBuffer {
+  #cache = {};
+  #reader = null;
+
+  constructor(reader) {
+    this.#reader = reader;
+  }
+
+  async read(offset, size) {
+    return await this.#reader(offset, size);
+  }
+
+  async write(offset, buffer) {
+  }
+
+  async truncate(size) {
+  }
+
+  async flush() {
+  }
+}
+
 export class NativeIo {
   #handle = null;
+  #filesize = 0;
   #file = null;
   #offset = 0;
   #writableStream = null;
+  #cache = null;
+
+  constructor() {
+    this.#cache = new StoreBuffer(async (offset, size) => {
+      const previousOffset = this.#offset;
+      this.#offset = offset;
+      const result = await this.#read(size);
+      this.#offset = previousOffset;
+      return result;
+    });
+  }
 
   async getAttributes() {
     await this.#check(false);
     return {
       name: this.#handle.name,
-      size: this.#file.size,
+      size: this.#filesize,
       lastModified: new Date(this.#file.lastModified)
     };
   }
@@ -24,14 +58,14 @@ export class NativeIo {
   }
 
   async read(size) {
-    await this.#check(false);
-    const blob = this.#file.slice(this.#offset, this.#offset + size);
-    const buffer = await blob.arrayBuffer();
-    if (buffer.byteLength == 0) {
-      return null;
+    if ((this.#offset + size) > this.#filesize) {
+      size = this.#filesize - this.#offset;
     }
-    this.#offset += buffer.byteLength;
-    return buffer;
+    if (this.#cache) {
+      return await this.#cache.read(this.#offset, size);
+    } else {
+      return await this.#read(size);
+    }
   }
 
   async write(buffer) {
@@ -39,23 +73,36 @@ export class NativeIo {
     if (!buffer instanceof ArrayBuffer) {
       throw Error.createInvalidBuffer();
     }
+    if (this.#cache) {
+      await this.#cache.write(this.#offset, buffer);
+    }
     await this.#writableStream.seek(this.#offset);
     await this.#writableStream.write(buffer);
     this.#offset += buffer.byteLength;
+    if (this.#offset > this.#filesize) {
+      this.#filesize = this.#offset;
+    }
   }
 
   async truncate(size) {
     await this.#check(true);
+    if (this.#cache) {
+      await this.#cache.truncate(size);
+    }
     await this.#writableStream.truncate(size);
     if (this.#offset > size) {
       this.#offset = size;
     }
+    this.#filesize = size;
   }
 
   async flush() {
     if (this.#writableStream) {
       await this.#writableStream.close();
       this.#writableStream = null;
+      if (this.#cache) {
+        await this.#cache.flush();
+      }
     }
   }
 
@@ -70,10 +117,12 @@ export class NativeIo {
     this.#handle = (await window.showOpenFilePicker({
       multiple: false
     }))[0];
+    await this.#check();
   }
 
   async open(handle) {
     this.#handle = handle;
+    await this.#check();
   }
 
   async #check(writable) {
@@ -82,11 +131,24 @@ export class NativeIo {
     }
     if (!this.#file) {
       this.#file = await this.#handle.getFile();
+      this.#filesize = this.#file.size;
     }
     if (writable && !this.#writableStream) {
       this.#writableStream = await this.#handle.createWritable({
         keepExistingData: true
       });
     }
+  }
+
+  async #read(size) {
+    // TODO: revalidation.
+    await this.#check(false);
+    const blob = this.#file.slice(this.#offset, this.#offset + size);
+    const buffer = await blob.arrayBuffer();
+    if (buffer.byteLength == 0) {
+      return null;
+    }
+    this.#offset += buffer.byteLength;
+    return buffer;
   }
 }
