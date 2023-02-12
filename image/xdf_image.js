@@ -38,6 +38,9 @@ export class XdfImage {
   }
 
   async flush() {
+    if (!this.#io) {
+      return;
+    }
     await this.#io.flush();
   }
 

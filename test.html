@@ -46,6 +46,7 @@
     await fat.list(entry => {
       console.log(entry);
     });
+    await fat.flush();
     console.log('chdir');
     await fat.chdir('newdir');
     console.log(await fat.getCwd());

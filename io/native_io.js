@@ -11,9 +11,7 @@ export class NativeIo {
   #writableStream = null;
 
   async getAttributes() {
-    if (!this.#file) {
-      throw Error.createNotOpen();
-    }
+    await this.#check(false);
     return {
       name: this.#handle.name,
       size: this.#file.size,
@@ -26,9 +24,7 @@ export class NativeIo {
   }
 
   async read(size) {
-    if (!this.#file) {
-      throw Error.createNotOpen();
-    }
+    await this.#check(false);
     const blob = this.#file.slice(this.#offset, this.#offset + size);
     const buffer = await blob.arrayBuffer();
     if (buffer.byteLength == 0) {
@@ -39,12 +35,7 @@ export class NativeIo {
   }
 
   async write(buffer) {
-    if (!this.#file) {
-      throw Error.createNotOpen();
-    }
-    if (!this.#writableStream) {
-      await this.#requestWriteAccess();
-    }
+    await this.#check(true);
     if (!buffer instanceof ArrayBuffer) {
       throw Error.createInvalidBuffer();
     }
@@ -54,12 +45,7 @@ export class NativeIo {
   }
 
   async truncate(size) {
-    if (!this.#file) {
-      throw Error.createNotOpen();
-    }
-    if (!this.#writableStream) {
-      await this.#requestWriteAccess();
-    }
+    await this.#check(true);
     await this.#writableStream.truncate(size);
     if (this.#offset > size) {
       this.#offset = size;
@@ -84,17 +70,23 @@ export class NativeIo {
     this.#handle = (await window.showOpenFilePicker({
       multiple: false
     }))[0];
-    this.#file = await this.#handle.getFile();
   }
 
   async open(handle) {
     this.#handle = handle;
-    this.#file = await this.#handle.getFile();
   }
 
-  async #requestWriteAccess() {
-    this.#writableStream = await this.#handle.createWritable({
-      keepExistingData: true
-    });
+  async #check(writable) {
+    if (!this.#handle) {
+      throw Error.createNotOpen();
+    }
+    if (!this.#file) {
+      this.#file = await this.#handle.getFile();
+    }
+    if (writable && !this.#writableStream) {
+      this.#writableStream = await this.#handle.createWritable({
+        keepExistingData: true
+      });
+    }
   }
 }
