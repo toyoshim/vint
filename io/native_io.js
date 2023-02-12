@@ -32,7 +32,7 @@ class StoreBuffer {
           dst[baseOffset + i] = cache[offset + i];
         }
       } else {
-        const src = new Uint8Array(await this.#reader(startOffset, size));
+        const src = new Uint8Array(await this.#reader(startOffset, size, true));
         for (let i = 0; i < size; ++i) {
           dst[baseOffset + i] = src[i];
         }
@@ -48,7 +48,8 @@ class StoreBuffer {
     const dst = new Uint8Array(end - start);
     const startPaddingSize = offset - start;
     if (startPaddingSize) {
-      const src = new Uint8Array(await this.#reader(start, startPaddingSize));
+      const src =
+        new Uint8Array(await this.#reader(start, startPaddingSize, false));
       for (let i = 0; i < startPaddingSize; ++i) {
         dst[i] = src[i];
       }
@@ -61,7 +62,7 @@ class StoreBuffer {
       const endPaddingStart = offset + buffer.byteLength;
       const endPaddingSize = end - endPaddingStart;
       const src = new Uint8Array(
-        await this.#reader(endPaddingStart, endPaddingSize));
+        await this.#reader(endPaddingStart, endPaddingSize, false));
       const endPaddingOffset = endPaddingStart - start;
       for (let i = 0; i < endPaddingSize; ++i) {
         dst[endPaddingOffset + i] = src[i];
@@ -114,10 +115,10 @@ export class NativeIo {
   #cache = null;
 
   constructor() {
-    this.#cache = new StoreBuffer(async (offset, size) => {
+    this.#cache = new StoreBuffer(async (offset, size, bypassCache) => {
       const previousOffset = this.#offset;
       this.#offset = offset;
-      const result = await this.#read(size);
+      const result = await (bypassCache ? this.#read(size) : this.read(size));
       this.#offset = previousOffset;
       return result;
     });
