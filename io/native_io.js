@@ -4,6 +4,8 @@
 
 import { Error } from "../error.js"
 
+const blockSize = 4096;
+
 class StoreBuffer {
   #cache = {};
   #reader = null;
@@ -13,10 +15,62 @@ class StoreBuffer {
   }
 
   async read(offset, size) {
-    return await this.#reader(offset, size);
+    const dst = new Uint8Array(new ArrayBuffer(size));
+    const originOffset = offset;
+    const stopOffset = offset + size;
+
+    for (let startOffset = offset; startOffset < stopOffset;) {
+      const block = (startOffset / blockSize) | 0;
+      const endOffset = (startOffset + blockSize) & ~(blockSize - 1);
+      const size = endOffset - startOffset;
+      const baseOffset = startOffset - originOffset;
+      if (this.#cache[block]) {
+        const offset = startOffset % blockSize;
+        for (let i = 0; i < size; ++i) {
+          dst[baseOffset + i] = this.#cache[block][offset + i];
+        }
+      } else {
+        const src = new Uint8Array(await this.#reader(startOffset, size));
+        for (let i = 0; i < size; ++i) {
+          dst[baseOffset + i] = src[i];
+        }
+      }
+      startOffset += size;
+    }
+    return dst;
   }
 
   async write(offset, buffer) {
+    const start = offset & ~(blockSize - 1);
+    const end = (offset + buffer.byteLength + blockSize - 1) & ~(blockSize - 1);
+    const dst = new Uint8Array(end - start);
+    const startPaddingSize = offset - start;
+    if (startPaddingSize) {
+      const src = new Uint8Array(await this.#reader(start, startPaddingSize));
+      for (let i = 0; i < startPaddingSize; ++i) {
+        dst[i] = src[i];
+      }
+    }
+    const src = new Uint8Array(buffer);
+    for (let i = 0; i < buffer.byteLength; ++i) {
+      dst[startPaddingSize + i] = src[i];
+    }
+    if ((offset + buffer.byteLength) != end) {
+      const endPaddingStart = offset + buffer.byteLength;
+      const endPaddingSize = end - endPaddingStart;
+      const src = new Uint8Array(
+        await this.#reader(endPaddingStart, endPaddingSize));
+      const endPaddingOffset = endPaddingStart - start;
+      for (let i = 0; i < endPaddingSize; ++i) {
+        dst[endPaddingOffset + i] = src[i];
+      }
+    }
+    const startBlock = (start / blockSize) | 0;
+    const endBlock = (end / blockSize) | 0;
+    for (let block = startBlock; block < endBlock; ++block) {
+      const offset = (block - startBlock) * blockSize;
+      this.#cache[block] = dst.slice(offset, offset + blockSize);
+    }
   }
 
   async truncate(size) {
@@ -62,7 +116,8 @@ export class NativeIo {
       size = this.#filesize - this.#offset;
     }
     if (this.#cache) {
-      return await this.#cache.read(this.#offset, size);
+      const result = await this.#cache.read(this.#offset, size);
+      return result;
     } else {
       return await this.#read(size);
     }
