@@ -6,10 +6,9 @@ import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
 // TODO:
-//  1. create a new directory.
-//  2. remove the directory.
-//  3. expand dirent case.
-//  4. remove a file with content.
+//  1. remove the directory.
+//  2. expand dirent case.
+//  3. remove a file with content.
 
 function getAscii(buffer, offset, size) {
   const end = offset + size;
@@ -111,6 +110,18 @@ function createEntryName(name) {
   };
 }
 
+function updateEntryWithOptions(entry, options) {
+  entry.writable =
+    (options.writable !== undefined) ? options.writable : true;
+  entry.readable =
+    (options.readable !== undefined) ? options.readable : true;
+  entry.system =
+    (options.system !== undefined) ? options.system : false;
+  entry.created = options.created;
+  entry.accessed = options.accessed;
+  entry.modified = options.modified;
+}
+
 function getTimestamp(date, time, subtime) {
   const year = 1980 + (date >> 9);
   const month = (date >> 5) & 15;
@@ -190,6 +201,7 @@ export class FatFs {
   #dataStartSector = 0;
   #dataSectors = 0;
   #fatType = 0;
+  #lastClusterId = 0;
   #fat = null;
   #currentDirectoryStartCluster = 0;
   #currentDirectoryClusters = 0;
@@ -241,6 +253,7 @@ export class FatFs {
     this.#dataSectors = this.#totalSectors - this.#dataSectors;
 
     const clusters = (this.#dataSectors / this.#sectorPerCluster) | 0;
+    this.#lastClusterId = clusters + 1;
     if (clusters < 4086) {
       this.#fatType = 12;
     } else if (clusters < 65526) {
@@ -282,15 +295,8 @@ export class FatFs {
         return true;
       }
       // Sub directory.
-      let size = 0;
-      for (let cluster = entry.cluster; cluster != 0xfff; size++) {
-        cluster = await this.#getFat(cluster);
-        if (!cluster) {
-          throw Error.createInvalidFormat('invalid directory entry');
-        }
-      }
       this.#currentDirectoryStartCluster = entry.cluster;
-      this.#currentDirectoryClusters = size;
+      this.#currentDirectoryClusters = await this.#countFatLink(entry.cluster);
       if (name == '..') {
         this.#path.pop();
       } else {
@@ -304,8 +310,62 @@ export class FatFs {
     }
   }
 
-  async mkdir(name) {
-    // TODO
+  async mkdir(name, options) {
+    let found = false;
+    await this.#list(async entry => {
+      if (entry.name != name) {
+        return false;
+      }
+      found = true;
+      return true;
+    });
+    if (found) {
+      throw Error.createInvalidRequest('already exist');
+    }
+    const directory = await this.#readDirectoryEntries();
+    const index = findAvailableEntry(directory.data);
+    if (index < 0) {
+      // TODO: expand for non-root directory.
+      throw Error.createNoSpace();
+    }
+    const cluster = await this.#findAvailableCluster();
+    await this.#setFat(cluster, 0xfff);
+    await this.#flushFat();
+    const entry = createEntryName(name);
+    updateEntryWithOptions(entry, options || {});
+    entry.directory = true;
+    entry.cluster = cluster;
+    const result = await this.#updateEntry(directory, index, entry);
+    await this.#flushDirectoryEntry(directory);
+    const buffer = new ArrayBuffer(this.#bytesPerSector);
+    const sector = this.#convertClusterToSector(cluster);
+    for (let i = 1; i < this.#sectorPerCluster; ++i) {
+      await this.#image.write(sector + i, buffer);
+    }
+    const newDirectory = {
+      data: new Uint8Array(buffer),
+      sectors: [sector],
+      dirty: [false]
+    };
+    const currentDir = {
+      base: [0x2e, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20]
+    };
+    updateEntryWithOptions(currentDir, {
+      modified: result.modified
+    });
+    currentDir.directory = true;
+    currentDir.cluster = cluster;
+    await this.#updateEntry(newDirectory, 0, currentDir);
+    const parentDir = {
+      base: [0x2e, 0x2e, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20]
+    };
+    updateEntryWithOptions(parentDir, {
+      modified: result.modified
+    });
+    parentDir.directory = true;
+    parentDir.cluster = this.#currentDirectoryStartCluster;
+    await this.#updateEntry(newDirectory, 1, parentDir);
+    await this.#flushDirectoryEntry(newDirectory);
   }
 
   async remove(name) {
@@ -366,27 +426,10 @@ export class FatFs {
         throw Error.createNoSpace();
       }
       const entry = createEntryName(name);
+      updateEntryWithOptions(entry, options);
       entry.directory = false;
-      entry.writable =
-        (options.writable !== undefined) ? options.writable : true;
-      entry.readable =
-        (options.readable !== undefined) ? options.readable : true;
-      entry.system =
-        (options.system !== undefined) ? options.system : false;
-      entry.created = options.created;
-      entry.accessed = options.accessed;
-      entry.modified = options.modified;
       const result = this.#updateEntry(directory, index, entry);
-      for (let i = 0; i < directory.dirty.length; ++i) {
-        if (!directory.dirty[i]) {
-          continue;
-        }
-        const start = i * this.#bytesPerSector;
-        const end = start + this.#bytesPerSector;
-        await this.#image.write(
-          directory.sectors[i],
-          directory.data.slice(start, end).buffer);
-      }
+      await this.#flushDirectoryEntry(directory);
       io = new FatFsIo(this.#appendIoAttributes({
         name: name,
         size: 0,
@@ -491,14 +534,19 @@ export class FatFs {
   async #readSectors(sector, count) {
     const buffer = new ArrayBuffer(this.#bytesPerSector * count);
     const dst = new Uint8Array(buffer);
+    const dirty = [];
     for (let i = 0; i < count; ++i) {
       const src = new Uint8Array(await this.#image.read(sector + i));
       const offset = this.#bytesPerSector * i;
       for (let j = 0; j < this.#bytesPerSector; ++j) {
         dst[offset + j] = src[j];
       }
+      dirty.push(false);
     }
-    return dst;
+    return {
+      data: dst,
+      dirty: dirty
+    };
   }
 
   async #readClusters(cluster, count) {
@@ -508,8 +556,7 @@ export class FatFs {
     const sectors = [];
     const dirty = [];
     for (let i = 0; i < count; ++i) {
-      const sector =
-        this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
+      const sector = this.#convertClusterToSector(cluster);
       for (let j = 0; j < this.#sectorPerCluster; ++j) {
         const src = new Uint8Array(await this.#image.read(sector + j));
         sectors.push(sector + j);
@@ -519,7 +566,7 @@ export class FatFs {
           dst[offset + k] = src[k];
         }
       }
-      cluster = this.#getFat(cluster);
+      cluster = await this.#getFat(cluster);
     }
     return { data: dst, sectors: sectors, dirty: dirty };
   }
@@ -533,9 +580,9 @@ export class FatFs {
         dirty.push(false);
       }
       return {
-        data: await this.#readSectors(
+        data: (await this.#readSectors(
           this.#rootDirectoryStartSector,
-          this.#rootDirectorySectors),
+          this.#rootDirectorySectors)).data,
         sectors: sectors,
         dirty: dirty
       };
@@ -547,13 +594,64 @@ export class FatFs {
   }
 
   async #getFat(cluster) {
+    const offset = (cluster * 1.5) | 0;
     if (cluster & 1) {
-      const offset = (cluster * 1.5) | 0;
-      return (this.#fat[offset + 1] << 4) | (this.#fat[offset] >> 4);
+      return (this.#fat.data[offset + 1] << 4) |
+        (this.#fat.data[offset] >> 4);
     } else {
-      const offset = (cluster * 1.5) | 0;
-      return ((this.#fat[offset + 1] & 0x0f) << 8) | this.#fat[offset];
+      return ((this.#fat.data[offset + 1] & 0x0f) << 8) |
+        this.#fat.data[offset];
     }
+  }
+
+  async #setFat(cluster, value) {
+    const offset = (cluster * 1.5) | 0;
+    if (cluster & 1) {
+      this.#fat.data[offset + 1] = (value >> 4);
+      this.#fat.data[offset] = (this.#fat.data[offset] & 0x0f) |
+        ((value & 0x0f) << 4);
+    } else {
+      this.#fat.data[offset + 1] = (this.#fat.data[offset + 1] & 0xf0) |
+        (value >> 8);
+      this.#fat.data[offset] = value & 0xff;
+    }
+    this.#fat.dirty[(offset / this.#bytesPerSector) | 0] = true;
+    this.#fat.dirty[((offset + 1) / this.#bytesPerSector) | 0] = true;
+  }
+
+  async #flushFat() {
+    for (let i = 0; i < this.#fat.dirty.length; ++i) {
+      if (!this.#fat.dirty[i]) {
+        continue;
+      }
+      const start = i * this.#bytesPerSector;
+      const end = start + this.#bytesPerSector;
+      const buffer = this.#fat.data.slice(start, end).buffer;
+      await this.#image.write(this.#fatStartSector + i, buffer);
+      await this.#image.write(
+        this.#fatStartSector + this.#fatSectors + i, buffer);
+      this.#fat.dirty[i] = false;
+    }
+  }
+
+  async #countFatLink(cluster) {
+    let size = 0;
+    for (let link = cluster; link != 0xfff; size++) {
+      link = await this.#getFat(link);
+      if (link <= 2) {
+        throw Error.createInvalidFormat('invalid fat ID appears: ' + link);
+      }
+    }
+    return size;
+  }
+
+  async #findAvailableCluster() {
+    for (let i = 2; i <= this.#lastClusterId; ++i) {
+      if ((await this.#getFat(i)) == 0) {
+        return i;
+      }
+    }
+    throw Error.createNoSpace();
   }
 
   async #updateEntry(directory, index, entry) {
@@ -563,15 +661,18 @@ export class FatFs {
       data[offset + i] = entry.base[i];
     }
     for (let i = 0; i < 3; ++i) {
-      data[offset + 8 + i] = entry.ext[i];
+      data[offset + 8 + i] = entry.ext ? entry.ext[i] : 0x20;
     }
     data[offset + 11] =
       (entry.writable ? 0x00 : 0x01) |
       (entry.readable ? 0x00 : 0x02) |
       (entry.system ? 0x04 : 0x00) |
       (entry.directory ? 0x10 : 0x00);
-    for (let i = 0; i < 9; ++i) {
-      data[offset + 12 + i] = entry.human[i];
+    const isHuman = this.#oemName.startsWith('X68');
+    if (isHuman) {
+      for (let i = 0; i < 9; ++i) {
+        data[offset + 12 + i] = entry.human ? entry.human[i] : 0;
+      }
     }
     const modified = createTimestamp(entry.modified);
     data[offset + 22] = modified.time & 0xff;
@@ -580,8 +681,8 @@ export class FatFs {
     data[offset + 25] = (modified.date >> 8) & 0xff;
 
     // cluster is not assigned.
-    data[offset + 26] = 0;
-    data[offset + 27] = 0;
+    data[offset + 26] = entry.cluster ? (entry.cluster & 0xff) : 0;
+    data[offset + 27] = entry.cluster ? ((entry.cluster >> 8) & 0xff) : 0;
 
     // size starts with 0.
     data[offset + 28] = 0;
@@ -594,11 +695,28 @@ export class FatFs {
     return { modified: modified.now };
   }
 
+  async #flushDirectoryEntry(directory) {
+    for (let i = 0; i < directory.dirty.length; ++i) {
+      if (!directory.dirty[i]) {
+        continue;
+      }
+      const start = i * this.#bytesPerSector;
+      const end = start + this.#bytesPerSector;
+      await this.#image.write(
+        directory.sectors[i],
+        directory.data.slice(start, end).buffer);
+    }
+  }
+
   #appendIoAttributes(object) {
     object.bytesPerCluster = this.#bytesPerSector * this.#sectorPerCluster;
     object.getFat = this.#getFat.bind(this);
     object.readClusters = this.#readClusters.bind(this);
     object.flush = this.flush.bind(this);
     return object;
+  }
+
+  #convertClusterToSector(cluster) {
+    return this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
   }
 }

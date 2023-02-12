@@ -24,20 +24,21 @@
     await fat.list(entry => {
       console.log(entry);
     });
-    /*
-    await fat.chdir('SYS');
-    console.log(await fat.getCwd());
-    await fat.list(entry => {
-      console.log(entry);
-    });
-    await fat.chdir('..');
-    console.log(await fat.getCwd());
-    await fat.list(entry => {
-      console.log(entry);
-    });
-    */
-    const newFile = await fat.getIo('NEW', { create: true });
-    //    await fat.remove('NEW');
+    try {
+      await fat.chdir('newdir');
+      console.log(await fat.getCwd());
+      await fat.list(entry => {
+        console.log(entry);
+      });
+      await fat.chdir('..');
+      console.log(await fat.getCwd());
+      await fat.list(entry => {
+        console.log(entry);
+      });
+    } catch (e) { console.log(e); }
+    //const newFile = await fat.getIo('NEW', { create: true });
+    //await fat.mkdir('newdir');
+    //await fat.remove('NEW');
     fat.close();
     /*
     const file = await fat.getIo('AUTOEXEC.BAT');
