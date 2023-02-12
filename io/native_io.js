@@ -8,6 +8,7 @@ const blockSize = 4096;
 
 class StoreBuffer {
   #cache = {};
+  #staleCache = {};
   #reader = null;
 
   constructor(reader) {
@@ -24,10 +25,11 @@ class StoreBuffer {
       const endOffset = (startOffset + blockSize) & ~(blockSize - 1);
       const size = endOffset - startOffset;
       const baseOffset = startOffset - originOffset;
-      if (this.#cache[block]) {
+      const cache = this.#cache[block] || this.#staleCache[block];
+      if (cache) {
         const offset = startOffset % blockSize;
         for (let i = 0; i < size; ++i) {
-          dst[baseOffset + i] = this.#cache[block][offset + i];
+          dst[baseOffset + i] = cache[offset + i];
         }
       } else {
         const src = new Uint8Array(await this.#reader(startOffset, size));
@@ -74,9 +76,31 @@ class StoreBuffer {
   }
 
   async truncate(size) {
+    // Remove cache entries that are in the truncated area.
+    const nextBlock = (size / blockSize) | 0;
+    for (let key in this.#cache) {
+      if (key && (nextBlock <= key)) {
+        delete this.#cache[key];
+      }
+    }
+    for (let key in this.#staleCache) {
+      if (key && (nextBlock <= key)) {
+        delete this.#staleCache[key];
+      }
+    }
   }
 
-  async flush() {
+  flush() {
+    // Move the active cache to the stale cache, but still the stale cache
+    // entries should be reused until the flush is completed.
+    this.#staleCache = this.#cache;
+    this.#cache = {};
+  }
+
+  completeFlush() {
+    // Finally the entries in the stale cache can be provided via the underlying
+    // API. Release them now.
+    this.#staleCache = {};
   }
 }
 
@@ -86,6 +110,7 @@ export class NativeIo {
   #file = null;
   #offset = 0;
   #writableStream = null;
+  #flushState = 'idle';
   #cache = null;
 
   constructor() {
@@ -152,12 +177,17 @@ export class NativeIo {
   }
 
   async flush() {
+    if (this.#flushState != 'idle') {
+      this.#flushState = 'requested';
+      return;
+    }
     if (this.#writableStream) {
+      this.#flushState = 'running';
+      if (this.#cache) {
+        this.#cache.flush();
+      }
       await this.#writableStream.close();
       this.#writableStream = null;
-      if (this.#cache) {
-        await this.#cache.flush();
-      }
     }
   }
 
@@ -196,10 +226,30 @@ export class NativeIo {
   }
 
   async #read(size) {
-    // TODO: revalidation.
     await this.#check(false);
     const blob = this.#file.slice(this.#offset, this.#offset + size);
-    const buffer = await blob.arrayBuffer();
+    let buffer = null;;
+    try {
+      buffer = await blob.arrayBuffer();
+    } catch (e) {
+      // Once the writable stream is closed, the original file gets
+      // unaccessible and needs to reopen it.
+      if (e.name != 'NotReadableError') {
+        throw e;
+      }
+      if (this.#cache) {
+        this.#cache.completeFlush();
+      }
+      this.#file = null;
+      const result = await this.#read(size);
+      const flushState = this.#flushState;
+      this.#flushState = 'idle';
+      // Another flush may be requested.
+      if (flushState == 'requested') {
+        await this.flush();
+      }
+      return result;
+    }
     if (buffer.byteLength == 0) {
       return null;
     }
