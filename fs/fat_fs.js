@@ -5,9 +5,6 @@
 import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
-// TODO:
-//  - expand dirent case.
-
 function getAscii(buffer, offset, size) {
   const end = offset + size;
   const chars = [];
@@ -167,20 +164,11 @@ function countBlock(n, block) {
   return ((n + block - 1) / block) | 0;
 }
 
-function findAvailableEntry(entry) {
-  for (let offset = 0; offset < entry.byteLength; offset += 32) {
-    if (entry[offset] == 0xe5 || entry[offset] == 0) {
-      return offset / 32;
-    }
-  }
-  return -1;
-}
-
 export class FatFs {
   #image = null;
   #oemName = '';
   #bytesPerSector = 0;
-  #sectorPerCluster = 0;
+  #sectorsPerCluster = 0;
   #reservedSectorCount = 0;
   #fatCount = 0;
   #rootEntryCount = 0;
@@ -213,7 +201,7 @@ export class FatFs {
     const bootSector = new Uint8Array(await image.read(0));
     this.#oemName = getAscii(bootSector, 3, 8);
     this.#bytesPerSector = getShort(bootSector, 11);
-    this.#sectorPerCluster = bootSector[13];
+    this.#sectorsPerCluster = bootSector[13];
     this.#reservedSectorCount = getShort(bootSector, 14);
     this.#fatCount = bootSector[16];
     this.#rootEntryCount = getShort(bootSector, 17);
@@ -250,7 +238,7 @@ export class FatFs {
       this.#rootDirectoryStartSector + this.#rootDirectorySectors;
     this.#dataSectors = this.#totalSectors - this.#dataSectors;
 
-    const clusters = (this.#dataSectors / this.#sectorPerCluster) | 0;
+    const clusters = (this.#dataSectors / this.#sectorsPerCluster) | 0;
     this.#lastClusterId = clusters + 1;
     if (clusters < 4086) {
       this.#fatType = 12;
@@ -328,11 +316,7 @@ export class FatFs {
       throw Error.createInvalidRequest('already exist');
     }
     const directory = await this.#readDirectoryEntries();
-    const index = findAvailableEntry(directory.data);
-    if (index < 0) {
-      // TODO: expand for non-root directory.
-      throw Error.createNoSpace();
-    }
+    const index = await this.#findAvailableEntry(directory);
     const cluster = await this.#findAvailableCluster();
     await this.#setFat(cluster, 0xfff);
     await this.#flushFat();
@@ -344,7 +328,7 @@ export class FatFs {
     await this.#flushDirectoryEntry(directory);
     const buffer = new ArrayBuffer(this.#bytesPerSector);
     const sector = this.#convertClusterToSector(cluster);
-    for (let i = 1; i < this.#sectorPerCluster; ++i) {
+    for (let i = 1; i < this.#sectorsPerCluster; ++i) {
       await this.#image.write(sector + i, buffer);
     }
     const newDirectory = {
@@ -442,15 +426,11 @@ export class FatFs {
     if (!io && options && options.create) {
       // Create a new file.
       const directory = await this.#readDirectoryEntries();
-      const index = findAvailableEntry(directory.data);
-      if (index < 0) {
-        // TODO: expand for non-root directory.
-        throw Error.createNoSpace();
-      }
+      const index = await this.#findAvailableEntry(directory);
       const entry = createEntryName(name);
       updateEntryWithOptions(entry, options);
       entry.directory = false;
-      const result = this.#updateEntry(directory, index, entry);
+      const result = await this.#updateEntry(directory, index, entry);
       await this.#flushDirectoryEntry(directory);
       io = new FatFsIo(this.#appendIoAttributes({
         name: name,
@@ -572,17 +552,20 @@ export class FatFs {
 
   async #readClusters(cluster, count) {
     const buffer =
-      new ArrayBuffer(this.#bytesPerSector * this.#sectorPerCluster * count);
+      new ArrayBuffer(this.#bytesPerSector * this.#sectorsPerCluster * count);
     const dst = new Uint8Array(buffer);
     const sectors = [];
     const dirty = [];
     for (let i = 0; i < count; ++i) {
+      if (cluster == 0xfff) {
+        throw Error.createInvalidFormat('unexpected end mark to read dirent');
+      }
       const sector = this.#convertClusterToSector(cluster);
-      for (let j = 0; j < this.#sectorPerCluster; ++j) {
+      for (let j = 0; j < this.#sectorsPerCluster; ++j) {
         const src = new Uint8Array(await this.#image.read(sector + j));
         sectors.push(sector + j);
         dirty.push(false);
-        const offset = this.#bytesPerSector * (i * this.#sectorPerCluster + j);
+        const offset = this.#bytesPerSector * (i * this.#sectorsPerCluster + j);
         for (let k = 0; k < this.#bytesPerSector; ++k) {
           dst[offset + k] = src[k];
         }
@@ -616,12 +599,14 @@ export class FatFs {
           this.#rootDirectorySectors)).data,
         entries: this.#rootEntryCount,
         sectors: sectors,
-        dirty: dirty
+        dirty: dirty,
+        start: startCluster,
       };
     } else {
       // Sub-directory entry.
       const result = await this.#readClusters(startCluster, clusters);
       result.entries = result.sectors.length * this.#bytesPerSector / 32;
+      result.start = startCluster;
       return result;
     }
   }
@@ -695,6 +680,49 @@ export class FatFs {
     throw Error.createNoSpace();
   }
 
+  async #findAvailableEntry(directory) {
+    const entry = directory.data;
+    for (let offset = 0; offset < entry.byteLength; offset += 32) {
+      if (entry[offset] == 0xe5 || entry[offset] == 0) {
+        return offset / 32;
+      }
+    }
+    if (directory.start == 0) {
+      throw Error.createNoSpace('cannot expand root dirent');
+    }
+    const newCluster = await this.#findAvailableCluster();
+    let lastCluster = directory.start;
+    while (true) {
+      const nextCluster = await this.#getFat(lastCluster);
+      if (nextCluster == 0xfff) {
+        await this.#setFat(lastCluster, newCluster);
+        await this.#setFat(newCluster, 0xfff);
+        await this.#flushFat();
+        break;
+      }
+      lastCluster = nextCluster;
+    }
+    const buffer = new ArrayBuffer(this.#bytesPerSector);
+    const sector = this.#convertClusterToSector(newCluster);
+    for (let i = 0; i < this.#sectorsPerCluster; ++i) {
+      await this.#image.write(sector + i, buffer);
+      directory.sectors.push(sector + i);
+      directory.dirty.push(false);
+      directory.entries += this.#bytesPerSector / 32;
+    }
+    const previousData = directory.data;
+    const newSize =
+      previousData.byteLength + this.#bytesPerSector * this.#sectorsPerCluster;
+    directory.data = new Uint8Array(newSize);
+    for (let i = 0; i < previousData.byteLength; ++i) {
+      directory.data[i] = previousData[i];
+    }
+    if (this.#currentDirectoryStartCluster == directory.start) {
+      this.#currentDirectoryClusters++;
+    }
+    return (previousData.byteLength / 32) | 0;
+  }
+
   async #updateEntry(directory, index, entry) {
     const offset = index * 32;
     const data = directory.data;
@@ -750,7 +778,7 @@ export class FatFs {
   }
 
   #appendIoAttributes(object) {
-    object.bytesPerCluster = this.#bytesPerSector * this.#sectorPerCluster;
+    object.bytesPerCluster = this.#bytesPerSector * this.#sectorsPerCluster;
     object.getFat = this.#getFat.bind(this);
     object.readClusters = this.#readClusters.bind(this);
     object.flush = this.flush.bind(this);
@@ -758,6 +786,6 @@ export class FatFs {
   }
 
   #convertClusterToSector(cluster) {
-    return this.#dataStartSector + (cluster - 2) * this.#sectorPerCluster;
+    return this.#dataStartSector + (cluster - 2) * this.#sectorsPerCluster;
   }
 }
