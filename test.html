@@ -29,6 +29,7 @@
       });
       await fat.chdir('..');
     });
+    /*
     console.log(await fat.getAttributes());
     await fat.list(entry => {
       console.log(entry);
@@ -53,25 +54,26 @@
     await fat.chdir('newdir');
     console.log(await fat.getCwd());
     for (let i = 0; i < 256; ++i) {
-      console.log(i);
       await fat.getIo(i.toString(), { create: true });
     }
+    await fat.chdir('..');
     //await fat.remove('newdir');
     //await fat.remove('config.BAK');
     //fat.close();
-    /*
-    const file = await fat.getIo('AUTOEXEC.BAT');
+    */
+    const file = await fat.getIo('config.BAK');
+    const out = await fat.getIo('COPY', { create: true });
     console.log(file);
     while (true) {
       const data = await file.read(1024);
-      console.log(data.byteLength);
+      console.log(data);
       if (data.byteLength == 0) {
         break;
       }
       await out.write(data);
     }
     out.close();
-    */
+    fat.close();
   });
 </script>
 

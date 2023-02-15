@@ -187,7 +187,6 @@ export class NativeIo {
       if (this.#cache) {
         this.#cache.flush();
       }
-      console.log('closing...');
       await this.#writableStream.close();
       this.#writableStream = null;
     }
@@ -221,7 +220,6 @@ export class NativeIo {
       this.#filesize = this.#file.size;
     }
     if (writable && !this.#writableStream) {
-      console.log('writable...');
       this.#writableStream = await this.#handle.createWritable({
         keepExistingData: true
       });

@@ -420,7 +420,7 @@ export class FatFs {
           size: entry.size,
           lastModified: entry.modified,
           startCluster: entry.cluster
-        }));
+        }, entry.directoryEntry, entry.index));
         return true;
       }, true);
     if (!io && options && options.create) {
@@ -437,7 +437,7 @@ export class FatFs {
         size: 0,
         lastModified: result.modified,
         startCluster: 0
-      }));
+      }, directory, index));
     }
     if (!io) {
       throw Error.createNotFound();
@@ -777,11 +777,32 @@ export class FatFs {
     }
   }
 
-  #appendIoAttributes(object) {
-    object.bytesPerCluster = this.#bytesPerSector * this.#sectorsPerCluster;
+  #appendIoAttributes(object, directory, index) {
+    object.bytesPerSector = this.#bytesPerSector;
+    object.sectorsPerCluster = this.#sectorsPerCluster;
     object.getFat = this.#getFat.bind(this);
+    object.setFat = this.#setFat.bind(this);
+    object.flushFat = this.#flushFat.bind(this);
+    object.findAvailableCluster = this.#findAvailableCluster.bind(this);
     object.readClusters = this.#readClusters.bind(this);
+    object.writeSector = this.#image.write.bind(this.#image);
     object.flush = this.flush.bind(this);
+    object.updateEntry = (options) => {
+      const offset = index * 32;
+      const data = directory.data;
+      if (options.startCluster) {
+        data[offset + 26] = options.startCluster & 0xff;
+        data[offset + 27] = (options.startCluster >> 8) & 0xff;
+      }
+      if (options.size) {
+        data[offset + 28] = options.size & 0xff;
+        data[offset + 29] = (options.size >> 8) & 0xff;
+        data[offset + 30] = (options.size >> 16) & 0xff;
+        data[offset + 31] = (options.size >> 24) & 0xff;
+      }
+      directory.dirty[(offset / this.#bytesPerSector) | 0] = true;
+    };
+    object.flushEntry = this.#flushDirectoryEntry.bind(this, directory);
     return object;
   }
 
