@@ -9,9 +9,12 @@ import { NativeFs } from "../all_your_file/fs/native_fs.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
 
+// TODO: remember cursor position.
+
 const roots = [];
 roots.push(new RootFs());
 roots.push(new RootFs());
+let activeView = 0;
 
 const b2 = document.getElementById('b2');
 b2.innerText = 'Mount FS';
@@ -26,6 +29,7 @@ b2.addEventListener('click', async () => {
   if ((await roots[1].getCwd()) == '/') {
     reload(1);
   }
+  activate();
 });
 
 const b3 = document.getElementById('b3');
@@ -45,6 +49,7 @@ b3.addEventListener('click', async () => {
   if ((await roots[1].getCwd()) == '/') {
     reload(1);
   }
+  activate();
 });
 
 const b5 = document.getElementById('b5');
@@ -58,6 +63,63 @@ b5.addEventListener('click', async () => {
   reload(0);
 });
 
+frames[0].addEventListener('keydown', handleKeydown);
+frames[1].addEventListener('keydown', handleKeydown);
+document.addEventListener('keydown', handleKeydown);
+
+async function handleKeydown(e) {
+  if (e.key == 'ArrowUp') {
+    postMessage(activeView, 'cursor-up');
+  } else if (e.key == 'ArrowDown') {
+    postMessage(activeView, 'cursor-down');
+  } else if (e.key == 'ArrowLeft') {
+    if (activeView == 1) {
+      activeView = 0;
+      activate();
+    } else {
+      await roots[0].chdir('..');
+      reload(0);
+    }
+  } else if (e.key == 'ArrowRight') {
+    if (activeView == 0) {
+      activeView = 1;
+      activate();
+    } else {
+      await roots[1].chdir('..');
+      reload(1);
+    }
+  } else if (e.key == 'Enter') {
+    const result = await sendMessage(activeView, 'get-current');
+    if (result.data.directory) {
+      await roots[activeView].chdir(result.data.name);
+      reload(activeView);
+    }
+  } else if (e.key == ' ') {
+    postMessage(activeView, 'select');
+  } else {
+    console.log(e);
+  }
+}
+
+function activate() {
+  postMessage(0, 'active', activeView == 0);
+  postMessage(1, 'active', activeView == 1);
+}
+
+let resolver = null;
+window.addEventListener('message', e => {
+  if (resolver) {
+    resolver(e.data);
+    resolver = null;
+  }
+});
+
+function sendMessage(view, cmd, data) {
+  return new Promise((resolve, reject) => {
+    resolver = resolve;
+    postMessage(view, cmd, data);
+  });
+}
 
 function postMessage(view, cmd, data) {
   frames[view].postMessage({
@@ -70,7 +132,7 @@ function postMessage(view, cmd, data) {
 function reload(view) {
   postMessage(view, 'reset');
   roots[view].list(entry => {
-    if (entry.label) {
+    if (entry.volume || (entry.name == '.') || (entry.name == '..')) {
       return false;
     }
     postMessage(view, 'add', {

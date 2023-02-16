@@ -20,13 +20,21 @@
       background-color: black;
       color: white;
       font-family: 'Source Code Pro', 'M PLUS Rounded 1c', monospace;
+      scrollbar-width: none
     }
 
-    div.cursor {
+    div.active-cursor {
       border-width: 1px;
       border-bottom: solid;
       border-color: #888;
       background-color: #222;
+    }
+
+    div.inactive-cursor {
+      border-width: 1px;
+      border-bottom: dotted;
+      border-color: #222;
+      background-color: #111;
     }
 
     div.selected {
@@ -112,7 +120,25 @@
       return data.size.toLocaleString();
     }
 
-    const entries = [];
+    function hideCursor() {
+      if (entries.length == 0) {
+        return;
+      }
+      entries[cursor].div.setAttribute('class', '');
+    }
+
+    function showCursor() {
+      if (entries.length == 0) {
+        return;
+      }
+      entries[cursor].div.setAttribute(
+        'class', active ? 'active-cursor' : 'inactive-cursor');
+    }
+
+    // TODO: scroll.
+    let entries = [];
+    let cursor = 0;
+    let active = false;
     addEventListener('message', e => {
       if (e.data.id != 'vint') {
         return;
@@ -122,9 +148,43 @@
         const div = document.createElement('div');
         div.setAttribute('class', 'main');
         document.body.appendChild(div);
+        entries = [];
+        cursor = 0;
+      } else if (e.data.cmd == 'active') {
+        hideCursor();
+        active = e.data.data;
+        showCursor();
+      } else if (e.data.cmd == 'cursor-up') {
+        hideCursor();
+        if (cursor > 0) {
+          cursor--;
+        }
+        showCursor();
+      } else if (e.data.cmd == 'cursor-down') {
+        hideCursor();
+        if ((cursor + 1) < entries.length) {
+          cursor++;
+        }
+        showCursor();
+      } else if (e.data.cmd == 'get-current') {
+        parent.window.postMessage({
+          id: 'vint',
+          cmd: 'current',
+          data: {
+            name: entries[cursor].name,
+            directory: entries[cursor].directory
+          }
+        });
+      } else if (e.data.cmd == 'select') {
+        // TODO
       } else if (e.data.cmd == 'add') {
-        entries.push(e.data.data);
         const div = document.createElement('div');
+        e.data.data.div = div;
+        entries.push(e.data.data);
+        if (entries.length == 1) {
+          showCursor();
+        }
+        // TODO: generate ext part.
         div.appendChild(createSpan('name', e.data.data.name));
         div.appendChild(createSpan('ext',
           e.data.data.ext ? ('.' + e.data.data.ext) : ''));
