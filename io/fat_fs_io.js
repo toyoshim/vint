@@ -63,7 +63,9 @@ export class FatFsIo {
       }
       const writeSize = endOffset - offset;
       this.#offset += writeSize;
-      this.#options.size += writeSize;
+      if (this.#options.size < this.#offset) {
+        this.#options.size = this.#offset;
+      }
       const bytesPerSector = this.#options.bytesPerSector;
       this.#data.dirty[(offset / bytesPerSector) | 0] = true;
       this.#data.dirty[((endOffset - 1) / bytesPerSector) | 0] = true;
@@ -84,7 +86,36 @@ export class FatFsIo {
   }
 
   async truncate(size) {
-    throw Error.createNotImplemented('truncate');
+    if (this.#options.size <= size) {
+      return;
+    }
+    this.#options.size = size;
+    if (size < this.#offset) {
+      this.#offset = size;
+    }
+    if (size == 0) {
+      await this.#free(this.#cluster);
+      this.#options.updateEntry({ startCluster: 0, size: size });
+    } else {
+      const bytesPerCluster =
+        this.#options.bytesPerSector * this.#options.sectorsPerCluster;
+      let cluster = this.#cluster;
+      let clusterOffset = 0;
+      while ((clusterOffset + bytesPerCluster) <= size) {
+        clusterOffset += bytesPerCluster;
+        cluster = await this.#options.getFat(cluster);
+      }
+      await this.#free(await this.#options.getFat(cluster));
+      await this.#options.setFat(cluster, 0xfff);
+      this.#options.updateEntry({ size: size });
+      if (this.#cluster != cluster) {
+        this.#cluster = cluster;
+        this.#clusterOffset = clusterOffset;
+        this.#data = null;
+      }
+    }
+    await this.#options.flushFat();
+    await this.#options.flushEntry();
   }
 
   async flush() {
@@ -128,14 +159,19 @@ export class FatFsIo {
     }
     const bytesPerCluster =
       this.#options.bytesPerSector * this.#options.sectorsPerCluster;
-    while ((this.#clusterOffset + bytesPerCluster) <= this.#offset) {
+    while ((this.#clusterOffset + bytesPerCluster) < this.#offset) {
       await this.#seekToNextCluster();
     }
   }
 
   async #readCurrentCluster() {
     if (this.#data) {
-      return;
+      const offset = this.#offset - this.#clusterOffset;
+      const bytesPerCluster =
+        this.#options.bytesPerSector * this.#options.sectorsPerCluster;
+      if (offset < bytesPerCluster) {
+        return;
+      }
     }
     if (this.#options.size <= this.#offset) {
       // Allocate a new cluster.
@@ -145,16 +181,25 @@ export class FatFsIo {
         this.#clusterOffset = 0;
       } else {
         await this.#options.setFat(this.#cluster, cluster);
-        await this.#options.setFat(this.#cluster, 0xfff);
-        await this.#options.flushFat();
         this.#clusterOffset +=
           this.#options.bytesPerSector * this.#options.sectorsPerCluster;
       }
       this.#cluster = cluster;
+      await this.#options.setFat(this.#cluster, 0xfff);
+      await this.#options.flushFat();
     }
     this.#data = await this.#options.readClusters(this.#cluster, 1);
     if (!this.#data || this.#data.data.byteLength == 0) {
       throw Error.createInvalidFormat();
     }
+  }
+
+  async #free(cluster) {
+    if ((cluster < 2) || (cluster == 0xfff)) {
+      return;
+    }
+    const nextCluster = await this.#options.getFat(cluster);
+    await this.#options.setFat(cluster, 0);
+    return await this.#free(nextCluster);
   }
 } 

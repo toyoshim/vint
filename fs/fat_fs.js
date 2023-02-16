@@ -800,6 +800,12 @@ export class FatFs {
         data[offset + 30] = (options.size >> 16) & 0xff;
         data[offset + 31] = (options.size >> 24) & 0xff;
       }
+      const modified = createTimestamp();
+      data[offset + 22] = modified.time & 0xff;
+      data[offset + 23] = (modified.time >> 8) & 0xff;
+      data[offset + 24] = modified.date & 0xff;
+      data[offset + 25] = (modified.date >> 8) & 0xff;
+
       directory.dirty[(offset / this.#bytesPerSector) | 0] = true;
     };
     object.flushEntry = this.#flushDirectoryEntry.bind(this, directory);
