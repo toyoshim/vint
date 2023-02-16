@@ -9,6 +9,12 @@ import { NativeFs } from "../all_your_file/fs/native_fs.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
 
+// TODO:
+//  - file operations.
+//  - show current path.
+//  - D88 support.
+//  - DCU support.
+
 const roots = [];
 roots.push(new RootFs());
 roots.push(new RootFs());
