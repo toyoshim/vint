@@ -44,7 +44,12 @@ export class RootFs {
 
   async chdir(name) {
     if (this.#current >= 0) {
-      await this.#fs[this.#current].chdir(name);
+      await this.#fs[this.#current].chdir(name).catch(e => {
+        if ((name != '..') || (e.id != Error.notFound)) {
+          throw e;
+        }
+        this.#current = -1;
+      });
       return;
     }
     for (let i = 0; i < this.#fs.length; ++i) {
