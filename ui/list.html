@@ -1,0 +1,140 @@
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@100&family=M+PLUS+Rounded+1c:wght@100&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      border: 0px;
+      margin: 0px;
+      background-color: black;
+    }
+
+    div.main {
+      width: 440px;
+      padding: 10px;
+      background-color: black;
+      color: white;
+      font-family: 'Source Code Pro', 'M PLUS Rounded 1c', monospace;
+    }
+
+    div.cursor {
+      border-width: 1px;
+      border-bottom: solid;
+      border-color: #888;
+      background-color: #222;
+    }
+
+    div.selected {
+      background-color: white;
+      color: black;
+    }
+
+    span {
+      display: inline-block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      height: 16px;
+      font-size: 14px;
+    }
+
+    span.name {
+      width: 160px;
+      padding-left: 4px;
+    }
+
+    span.ext {
+      width: 32px;
+    }
+
+    span.size {
+      width: 100px;
+      text-align: right;
+    }
+
+    span.date {
+      width: 90px;
+      text-align: right;
+    }
+
+    span.time {
+      width: 40px;
+      text-align: right;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="main">
+  </div>
+
+  <script>
+    function createSpan(className, text) {
+      const span = document.createElement('span');
+      span.setAttribute('class', className);
+      span.innerText = text;
+      return span;
+    }
+
+    function createDateString(date) {
+      if (!date) {
+        return '    -  -  ';
+      }
+      const month = '0' + (date.getMonth() + 1);
+      const day = '0' + date.getDate();
+      return date.getFullYear().toString() + '-' +
+        month.substring(month.length - 2) + '-' +
+        day.substring(day.length - 2);
+    }
+
+    function createTimeString(date) {
+      if (!date) {
+        return '  :  ';
+      }
+      const hours = '0' + date.getHours();
+      const minutes = '0' + date.getMinutes();
+      return hours.substring(hours.length - 2) + ':' +
+        minutes.substring(minutes.length - 2);
+    }
+
+    function createSize(data) {
+      if (data.mount) {
+        return '<MOUNT>';
+      }
+      if (data.directory) {
+        return '<DIR>';
+      }
+      return data.size.toLocaleString();
+    }
+
+    const entries = [];
+    addEventListener('message', e => {
+      if (e.data.id != 'vint') {
+        return;
+      }
+      if (e.data.cmd == 'reset') {
+        document.body.removeChild(document.getElementsByClassName('main')[0]);
+        const div = document.createElement('div');
+        div.setAttribute('class', 'main');
+        document.body.appendChild(div);
+      } else if (e.data.cmd == 'add') {
+        entries.push(e.data.data);
+        const div = document.createElement('div');
+        div.appendChild(createSpan('name', e.data.data.name));
+        div.appendChild(createSpan('ext',
+          e.data.data.ext ? ('.' + e.data.data.ext) : ''));
+        div.appendChild(createSpan('size', createSize(e.data.data)));
+        div.appendChild(createSpan('date', createDateString(e.data.data.date)));
+        div.appendChild(createSpan('time', createTimeString(e.data.data.date)));
+        document.getElementsByClassName('main')[0].appendChild(div);
+      }
+    });
+  </script>
+</body>
+
+</html>
