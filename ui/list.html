@@ -110,6 +110,20 @@
         minutes.substring(minutes.length - 2);
     }
 
+    function splitName(name) {
+      const index = name.lastIndexOf('.');
+      if ((index < 0) || (3 < (name.length - 1 - index))) {
+        return {
+          base: name,
+          ext: ''
+        };
+      }
+      return {
+        base: name.substring(0, index),
+        ext: name.substring(index)
+      };
+    }
+
     function createSize(data) {
       if (data.mount) {
         return '<MOUNT>';
@@ -189,10 +203,9 @@
         if (entries.length == 1) {
           showCursor();
         }
-        // TODO: generate ext part.
-        div.appendChild(createSpan('name', e.data.data.name));
-        div.appendChild(createSpan('ext',
-          e.data.data.ext ? ('.' + e.data.data.ext) : ''));
+        const name = splitName(e.data.data.name);
+        div.appendChild(createSpan('name', name.base));
+        div.appendChild(createSpan('ext', name.ext));
         div.appendChild(createSpan('size', createSize(e.data.data)));
         div.appendChild(createSpan('date', createDateString(e.data.data.date)));
         div.appendChild(createSpan('time', createTimeString(e.data.data.date)));
