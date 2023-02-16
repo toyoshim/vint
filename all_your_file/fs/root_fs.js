@@ -105,7 +105,8 @@ export class RootFs {
 
   async getCwd() {
     if (this.#current >= 0) {
-      return await this.#fs[this.#current].getCwd();
+      return '/' + (await this.#fs[this.#current].getAttributes()).volumeLabel +
+        (await this.#fs[this.#current].getCwd());
     }
     return '/';
   }
