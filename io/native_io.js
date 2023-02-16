@@ -61,11 +61,13 @@ class StoreBuffer {
     if ((offset + buffer.byteLength) != end) {
       const endPaddingStart = offset + buffer.byteLength;
       const endPaddingSize = end - endPaddingStart;
-      const src = new Uint8Array(
-        await this.#reader(endPaddingStart, endPaddingSize, false));
-      const endPaddingOffset = endPaddingStart - start;
-      for (let i = 0; i < endPaddingSize; ++i) {
-        dst[endPaddingOffset + i] = src[i];
+      if (endPaddingSize) {
+        const src = new Uint8Array(
+          await this.#reader(endPaddingStart, endPaddingSize, false));
+        const endPaddingOffset = endPaddingStart - start;
+        for (let i = 0; i < src.byteLength; ++i) {
+          dst[endPaddingOffset + i] = src[i];
+        }
       }
     }
     const startBlock = (start / blockSize) | 0;
@@ -116,6 +118,9 @@ export class NativeIo {
 
   constructor() {
     this.#cache = new StoreBuffer(async (offset, size, bypassCache) => {
+      if (this.#filesize <= offset) {
+        return new ArrayBuffer(0);
+      }
       const previousOffset = this.#offset;
       this.#offset = offset;
       const result = await (bypassCache ? this.#read(size) : this.read(size));
