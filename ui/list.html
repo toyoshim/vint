@@ -166,13 +166,18 @@
           cursor++;
         }
         showCursor();
+      } else if (e.data.cmd == 'cursor-set') {
+        hideCursor();
+        cursor = Math.max(0, Math.min(e.data.data.cursor, entries.length - 1));
+        showCursor();
       } else if (e.data.cmd == 'get-current') {
         parent.window.postMessage({
           id: 'vint',
           cmd: 'current',
           data: {
             name: entries[cursor].name,
-            directory: entries[cursor].directory
+            directory: entries[cursor].directory,
+            cursor: cursor
           }
         });
       } else if (e.data.cmd == 'select') {

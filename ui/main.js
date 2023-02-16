@@ -9,11 +9,10 @@ import { NativeFs } from "../all_your_file/fs/native_fs.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
 
-// TODO: remember cursor position.
-
 const roots = [];
 roots.push(new RootFs());
 roots.push(new RootFs());
+const cursors = [[], []];
 let activeView = 0;
 
 const b2 = document.getElementById('b2');
@@ -24,10 +23,10 @@ b2.addEventListener('click', async () => {
   await roots[0].mount(fs);
   await roots[1].mount(fs);
   if ((await roots[0].getCwd()) == '/') {
-    reload(0);
+    await reload(0);
   }
   if ((await roots[1].getCwd()) == '/') {
-    reload(1);
+    await reload(1);
   }
   activate();
 });
@@ -44,10 +43,10 @@ b3.addEventListener('click', async () => {
   await roots[0].mount(fs);
   await roots[1].mount(fs);
   if ((await roots[0].getCwd()) == '/') {
-    reload(0);
+    await reload(0);
   }
   if ((await roots[1].getCwd()) == '/') {
-    reload(1);
+    await reload(1);
   }
   activate();
 });
@@ -55,12 +54,6 @@ b3.addEventListener('click', async () => {
 const b5 = document.getElementById('b5');
 b5.innerText = 'Debug';
 b5.addEventListener('click', async () => {
-  await roots[0].list(async e => {
-    if (e.name.startsWith('CH68')) {
-      await roots[0].chdir(e.name);
-    }
-  });
-  reload(0);
 });
 
 frames[0].addEventListener('keydown', handleKeydown);
@@ -77,22 +70,29 @@ async function handleKeydown(e) {
       activeView = 0;
       activate();
     } else {
-      await roots[0].chdir('..');
-      reload(0);
+      await roots[activeView].chdir('..');
+      await reload(activeView);
+      postMessage(activeView, 'cursor-set', {
+        cursor: cursors[activeView].pop()
+      });
     }
   } else if (e.key == 'ArrowRight') {
     if (activeView == 0) {
       activeView = 1;
       activate();
     } else {
-      await roots[1].chdir('..');
-      reload(1);
+      await roots[activeView].chdir('..');
+      await reload(activeView);
+      postMessage(activeView, 'cursor-set', {
+        cursor: cursors[activeView].pop()
+      });
     }
   } else if (e.key == 'Enter') {
     const result = await sendMessage(activeView, 'get-current');
     if (result.data.directory) {
       await roots[activeView].chdir(result.data.name);
-      reload(activeView);
+      cursors[activeView].push(result.data.cursor);
+      await reload(activeView);
     }
   } else if (e.key == ' ') {
     postMessage(activeView, 'select');
@@ -129,9 +129,9 @@ function postMessage(view, cmd, data) {
   }, document.location.origin);
 }
 
-function reload(view) {
+async function reload(view) {
   postMessage(view, 'reset');
-  roots[view].list(entry => {
+  await roots[view].list(entry => {
     if (entry.volume || (entry.name == '.') || (entry.name == '..')) {
       return false;
     }
