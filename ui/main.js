@@ -69,7 +69,7 @@ async function handleKeydown(e) {
     if (activeView == 1) {
       activeView = 0;
       activate();
-    } else {
+    } else if (await roots[activeView].getCwd() != '/') {
       await roots[activeView].chdir('..');
       await reload(activeView);
       postMessage(activeView, 'cursor-set', {
@@ -80,7 +80,7 @@ async function handleKeydown(e) {
     if (activeView == 0) {
       activeView = 1;
       activate();
-    } else {
+    } else if (await roots[activeView].getCwd() != '/') {
       await roots[activeView].chdir('..');
       await reload(activeView);
       postMessage(activeView, 'cursor-set', {
