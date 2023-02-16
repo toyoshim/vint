@@ -42,11 +42,11 @@ export class Error {
   static invalidName = 7;
   static notEmpty = 8;
 
-  #id = Error.unknown;
+  id = Error.unknown;
   #hint = '';
 
   constructor(id, hint) {
-    this.#id = id;
+    this.id = id;
     if (hint) {
       this.#hint = hint;
     }
