@@ -9,10 +9,12 @@ export class NativeFs {
   #handle = null;
   #parentHandles = [];
   #path = [];
+  #volumeLabel = '';
 
   async choose(writeAccess) {
     const options = writeAccess ? { mode: 'readwrite' } : undefined;
     this.#handle = await window.showDirectoryPicker(options);
+    this.#volumeLabel = this.#handle.name;
   }
 
   async list(observer) {
@@ -105,7 +107,7 @@ export class NativeFs {
   async getAttributes() {
     return {
       encoding: 'UCS-2',
-      volumeLabel: this.#handle.name
+      volumeLabel: this.#volumeLabel
     };
   }
 
