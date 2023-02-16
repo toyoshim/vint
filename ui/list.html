@@ -14,13 +14,19 @@
       background-color: black;
     }
 
-    div.main {
-      width: 440px;
-      padding: 10px;
+    div {
       background-color: black;
       color: white;
       font-family: 'Source Code Pro', 'M PLUS Rounded 1c', monospace;
-      scrollbar-width: none
+      border-width: 1px;
+      border-bottom: solid;
+      border-color: black;
+      height: 18px;
+    }
+
+    div.main {
+      width: 440px;
+      padding: 10px;
     }
 
     div.active-cursor {
@@ -82,6 +88,11 @@
   </div>
 
   <script>
+    // TODO:
+    // - scroll.
+    // - sort.
+    // - file selection.
+
     function createSpan(className, text) {
       const span = document.createElement('span');
       span.setAttribute('class', className);
@@ -91,7 +102,7 @@
 
     function createDateString(date) {
       if (!date) {
-        return '    -  -  ';
+        return '';
       }
       const month = '0' + (date.getMonth() + 1);
       const day = '0' + date.getDate();
@@ -102,7 +113,7 @@
 
     function createTimeString(date) {
       if (!date) {
-        return '  :  ';
+        return '';
       }
       const hours = '0' + date.getHours();
       const minutes = '0' + date.getMinutes();
@@ -149,7 +160,6 @@
         'class', active ? 'active-cursor' : 'inactive-cursor');
     }
 
-    // TODO: scroll.
     let entries = [];
     let cursor = 0;
     let active = false;
