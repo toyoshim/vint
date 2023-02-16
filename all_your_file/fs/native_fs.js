@@ -104,7 +104,7 @@ export class NativeFs {
 
   async getAttributes() {
     return {
-      encoding: 'UCS-16',
+      encoding: 'UCS-2',
       volumeLabel: this.#handle.name
     };
   }
