@@ -89,7 +89,6 @@
 
   <script>
     // TODO:
-    // - scroll.
     // - sort.
     // - file selection.
 
@@ -160,9 +159,15 @@
         'class', active ? 'active-cursor' : 'inactive-cursor');
     }
 
+    function scroll(y) {
+      scrollY = y;
+      scrollTo(0, y * 21);
+    }
+
     let entries = [];
     let cursor = 0;
     let active = false;
+    let scrollY = 0;
     addEventListener('message', e => {
       if (e.data.id != 'vint') {
         return;
@@ -180,20 +185,41 @@
         showCursor();
       } else if (e.data.cmd == 'cursor-up') {
         hideCursor();
-        if (cursor > 0) {
-          cursor--;
-        }
+        cursor = Math.max(cursor - 1, 0);
         showCursor();
+        if (cursor < scrollY) {
+          scroll(cursor);
+        }
       } else if (e.data.cmd == 'cursor-down') {
         hideCursor();
-        if ((cursor + 1) < entries.length) {
-          cursor++;
-        }
+        cursor = Math.min(cursor + 1, entries.length - 1);
         showCursor();
+        if (cursor > (scrollY + 22)) {
+          scroll(cursor - 22);
+        }
+      } else if (e.data.cmd == 'cursor-page-up') {
+        hideCursor();
+        cursor = Math.max(cursor - 10, 0);
+        showCursor();
+        if (cursor < scrollY) {
+          scroll(cursor);
+        }
+      } else if (e.data.cmd == 'cursor-page-down') {
+        hideCursor();
+        cursor = Math.min(cursor + 10, entries.length - 1);
+        showCursor();
+        if (cursor > (scrollY + 22)) {
+          scroll(cursor - 22);
+        }
       } else if (e.data.cmd == 'cursor-set') {
         hideCursor();
         cursor = Math.max(0, Math.min(e.data.data.cursor, entries.length - 1));
         showCursor();
+        if (cursor < scrollY) {
+          scroll(cursor);
+        } else if (cursor > (scrollY + 22)) {
+          scroll(cursor - 22);
+        }
       } else if (e.data.cmd == 'get-current') {
         parent.window.postMessage({
           id: 'vint',

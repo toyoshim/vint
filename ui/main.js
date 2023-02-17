@@ -92,6 +92,10 @@ async function handleKeydown(e) {
     postMessage(activeView, 'cursor-up');
   } else if (e.key == 'ArrowDown') {
     postMessage(activeView, 'cursor-down');
+  } else if (e.key == 'PageUp') {
+    postMessage(activeView, 'cursor-page-up');
+  } else if (e.key == 'PageDown') {
+    postMessage(activeView, 'cursor-page-down');
   } else if (e.key == 'ArrowLeft') {
     if (activeView == 1) {
       activeView = 0;
