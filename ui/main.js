@@ -6,6 +6,7 @@ import { Error } from "../all_your_file/error.js"
 import { RootFs } from "../all_your_file/fs/root_fs.js"
 import { FatFs } from "../all_your_file/fs/fat_fs.js"
 import { NativeFs } from "../all_your_file/fs/native_fs.js"
+import { DcuImage } from "../all_your_file/image/dcu_image.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
 
@@ -13,7 +14,6 @@ import { NativeIo } from "../all_your_file/io/native_io.js"
 //  - file operations.
 //  - show current path.
 //  - D88 support.
-//  - DCU support.
 
 const roots = [];
 roots.push(new RootFs());
@@ -38,14 +38,35 @@ b2.addEventListener('click', async () => {
 });
 
 const b3 = document.getElementById('b3');
-b3.innerText = 'Mount XDF';
+b3.innerText = 'Mnt Image';
 b3.addEventListener('click', async () => {
   const io = new NativeIo();
-  await io.choose();
-  const xdf = new XdfImage();
-  await xdf.open(io);
+  await io.choose({
+    types: [
+      {
+        description: 'All supported images',
+        accept: { '*/*': ['.xdf', '.dcu'] }
+      },
+      {
+        description: 'XDF - FD image for X68000 emulators',
+        accept: { '*/*': ['.xdf'] }
+      },
+      {
+        description: 'DCU - FD image for Disk Copy Utility',
+        accept: { '*/*': ['.dcu'] }
+      }
+    ]
+  });
+  const name = (await io.getAttributes()).name.toLowerCase();
+  let image;
+  if (name.endsWith('dcu')) {
+    image = new DcuImage();
+  } else {
+    image = new XdfImage();
+  }
+  await image.open(io);
   const fs = new FatFs();
-  await fs.open(xdf);
+  await fs.open(image);
   await roots[0].mount(fs);
   await roots[1].mount(fs);
   if ((await roots[0].getCwd()) == '/') {

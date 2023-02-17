@@ -204,10 +204,14 @@ export class NativeIo {
     this.#offset = 0;
   }
 
-  async choose() {
-    this.#handle = (await window.showOpenFilePicker({
+  async choose(options) {
+    const pickerOptions = {
       multiple: false
-    }))[0];
+    };
+    if (options && options.types) {
+      pickerOptions.types = options.types;
+    }
+    this.#handle = (await window.showOpenFilePicker(pickerOptions))[0];
     await this.#check();
   }
 
