@@ -199,34 +199,19 @@ export class FatFs {
     }
     const attributes = await image.getAttributes();
     const bootSector = new Uint8Array(await image.read(0));
-    this.#oemName = getAscii(bootSector, 3, 8);
-    this.#bytesPerSector = getShort(bootSector, 11);
-    this.#sectorsPerCluster = bootSector[13];
-    this.#reservedSectorCount = getShort(bootSector, 14);
-    this.#fatCount = bootSector[16];
-    this.#rootEntryCount = getShort(bootSector, 17);
-    this.#totalSectors = getShort(bootSector, 19);
-    this.#mediaType = bootSector[21];
-    this.#fatSectors = getShort(bootSector, 22);
-    this.#sectorsPerTrack = getShort(bootSector, 24);
-    this.#headCount = getShort(bootSector, 26);
-    this.#hiddenSectors = getLong(bootSector, 28);
-    if (this.#totalSectors == 0) {
-      this.#totalSectors = getLong(bootSector, 32);
-    }
-    if (bootSector[38] == 0x29) {
-      this.#volumeId = getLong(bootSector, 39);
-      this.#volumeLabel = getAscii(bootSector, 43, 11);
-      this.#fatTypeString = getAscii(bootSector, 54, 8);
+    if (bootSector[0] == 0x60 && bootSector[1] == 0x1c) {
+      this.#readEarlyHumanHeader(bootSector);
+    } else {
+      this.#readMsdosHeader(bootSector);
     }
     if (this.#bytesPerSector != attributes.bytesPerSector) {
-      throw Error.createInvalidFormat('inconsistent sector size');
+      throw Error.createInvalidFormat('inconsistent sector size', this);
     }
     if (this.#sectorsPerTrack != attributes.sectorsPerTrack) {
-      throw Error.createInvalidFormat('inconsistent sectors/track');
+      throw Error.createInvalidFormat('inconsistent sectors/track', this);
     }
     if (this.#totalSectors != attributes.sectorsPerTrack * attributes.tracks) {
-      throw Error.createInvalidFormat('inconsistent total tracks');
+      throw Error.createInvalidFormat('inconsistent total tracks', this);
     }
 
     this.#fatStartSector = this.#reservedSectorCount;
@@ -261,6 +246,9 @@ export class FatFs {
         this.#volumeLabel = entry.name;
         return true;
       }, true);
+    if (this.#volumeLabel.length == 0) {
+      this.#volumeLabel = (await this.#image.getAttributes()).name;
+    }
     this.#path = [];
   }
 
@@ -467,7 +455,7 @@ export class FatFs {
 
   async #list(directoryEntry, observer, showPrivate) {
     const directory = directoryEntry.data;
-    const isHuman = this.#oemName.startsWith('X68');
+    const isHuman = this.#isHuman();
     for (let index = 0; index < directoryEntry.entries; ++index) {
       const firstEntry = directory[32 * index];
       if (firstEntry == 0xe5) {
@@ -737,8 +725,7 @@ export class FatFs {
       (entry.readable ? 0x00 : 0x02) |
       (entry.system ? 0x04 : 0x00) |
       (entry.directory ? 0x10 : 0x00);
-    const isHuman = this.#oemName.startsWith('X68');
-    if (isHuman) {
+    if (this.#isHuman()) {
       for (let i = 0; i < 9; ++i) {
         data[offset + 12 + i] = entry.human ? entry.human[i] : 0;
       }
@@ -814,5 +801,70 @@ export class FatFs {
 
   #convertClusterToSector(cluster) {
     return this.#dataStartSector + (cluster - 2) * this.#sectorsPerCluster;
+  }
+
+  #isHuman() {
+    return this.#oemName.startsWith('X68') ||
+      this.#oemName.startsWith('Hudson soft 1.');
+  }
+
+  #readMsdosHeader(bootSector) {
+    this.#oemName = getAscii(bootSector, 3, 8);
+    this.#bytesPerSector = getShort(bootSector, 11);
+    this.#sectorsPerCluster = bootSector[13];
+    this.#reservedSectorCount = getShort(bootSector, 14);
+    this.#fatCount = bootSector[16];
+    this.#rootEntryCount = getShort(bootSector, 17);
+    this.#totalSectors = getShort(bootSector, 19);
+    this.#mediaType = bootSector[21];
+    this.#fatSectors = getShort(bootSector, 22);
+    this.#sectorsPerTrack = getShort(bootSector, 24);
+    this.#headCount = getShort(bootSector, 26);
+    this.#hiddenSectors = getLong(bootSector, 28);
+    if (this.#totalSectors == 0) {
+      this.#totalSectors = getLong(bootSector, 32);
+    }
+    if (bootSector[38] == 0x29) {
+      this.#volumeId = getLong(bootSector, 39);
+      this.#volumeLabel = getAscii(bootSector, 43, 11);
+      this.#fatTypeString = getAscii(bootSector, 54, 8);
+    }
+  }
+
+  #readEarlyHumanHeader(bootSector) {
+    this.#oemName = getAscii(bootSector, 2, 16);
+
+    // These fields are probably correct as the numbers are very special.
+    this.#bytesPerSector = (bootSector[0x12] << 8) | bootSector[0x13];
+    this.#rootEntryCount = bootSector[0x19];
+    this.#totalSectors = (bootSector[0x1a] << 8) | bootSector[0x1b];
+    this.#mediaType = bootSector[0x1c];
+    console.assert(this.#bytesPerSector == 1024);
+    console.assert(this.#rootEntryCount == 192);
+    console.assert(this.#totalSectors == 1232);
+    console.assert(this.#mediaType == 0xfe);
+
+    // Following fields are not unique enough to identify the correct mapping.
+    // We may be able to ensure them by feeding a modified image to the X68k.
+    console.assert(bootSector[0x16] == 0x00);
+    console.assert(bootSector[0x18] == 0x00);
+    this.#hiddenSectors = 0;
+    this.#volumeId = 0;
+
+    console.assert(bootSector[0x14] == 0x01);
+    console.assert(bootSector[0x17] == 0x01);
+    this.#sectorsPerCluster = 1;
+    this.#reservedSectorCount = 1;
+
+    console.assert(bootSector[0x15] == 0x02);
+    console.assert(bootSector[0x1d] == 0x02);
+    this.#fatCount = 2;
+    this.#fatSectors = 2;
+
+    // These fileds are not in the header, maybe.
+    this.#sectorsPerTrack = 8;  // Can be identified via the media type.
+    this.#headCount = 2;        // Can be identified via the media type.
+    this.#volumeLabel = '';
+    this.#fatTypeString = '';
   }
 }
