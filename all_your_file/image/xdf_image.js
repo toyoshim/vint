@@ -8,6 +8,7 @@ const sectorSize = 1024;
 
 export class XdfImage {
   #io = null;
+  #name = '';
 
   async open(io) {
     if (this.#io) {
@@ -17,6 +18,7 @@ export class XdfImage {
     if (attributes.size != 1261568) {
       throw Error.createInvalidFormat();
     }
+    this.#name = attributes.name;
     this.#io = io;
   }
 
@@ -25,8 +27,7 @@ export class XdfImage {
       throw Error.createNotOpen();
     }
     await this.#io.seek(sector * sectorSize);
-    const result = await this.#io.read(sectorSize);
-    return result;
+    return await this.#io.read(sectorSize);
   }
 
   async write(sector, data) {
@@ -48,7 +49,8 @@ export class XdfImage {
     return {
       bytesPerSector: 1024,
       sectorsPerTrack: 8,
-      tracks: 154
+      tracks: 154,
+      name: this.#name
     };
   }
 }
