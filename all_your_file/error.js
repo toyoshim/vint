@@ -3,32 +3,35 @@
 // in the LICENSE file.
 
 export class Error {
-  static createNotOpen(hint) {
-    return new Error(Error.notOpen, hint);
+  static createNotOpen(hint, self) {
+    return new Error(Error.notOpen, hint, self);
   }
-  static createInvalidBuffer(hint) {
-    return new Error(Error.invalidBuffer, hint);
+  static createInvalidBuffer(hint, self) {
+    return new Error(Error.invalidBuffer, hint, self);
   }
-  static createInvalidRequest(hint) {
-    return new Error(Error.invalidRequest, hint);
+  static createInvalidRequest(hint, self) {
+    return new Error(Error.invalidRequest, hint, self);
   }
-  static createInvalidFormat(hint) {
-    return new Error(Error.invalidFormat, hint);
+  static createInvalidFormat(hint, self) {
+    return new Error(Error.invalidFormat, hint, self);
   }
-  static createNotImplemented(hint) {
-    return new Error(Error.notImplemented, hint);
+  static createNotImplemented(hint, self) {
+    return new Error(Error.notImplemented, hint, self);
   }
-  static createNotFound(hint) {
-    return new Error(Error.notFound, hint);
+  static createNotFound(hint, self) {
+    return new Error(Error.notFound, hint, self);
   }
-  static createNoSpace(hint) {
-    return new Error(Error.noSpace, hint);
+  static createNoSpace(hint, self) {
+    return new Error(Error.noSpace, hint, self);
   }
-  static createInvalidName(hint) {
-    return new Error(Error.invalidName, hint);
+  static createInvalidName(hint, self) {
+    return new Error(Error.invalidName, hint, self);
   }
-  static createNotEmpty(hint) {
-    return new Error(Error.notEmpty, hint);
+  static createNotEmpty(hint, self) {
+    return new Error(Error.notEmpty, hint, self);
+  }
+  static createDiskError(hint, self) {
+    return new Error(Error.diskError, hint, self);
   }
 
   static notImplemented = -1;
@@ -41,14 +44,19 @@ export class Error {
   static noSpace = 6;
   static invalidName = 7;
   static notEmpty = 8;
+  static diskError = 9;
 
   id = Error.unknown;
   #hint = '';
+  #self = null;
 
-  constructor(id, hint) {
+  constructor(id, hint, self) {
     this.id = id;
     if (hint) {
       this.#hint = hint;
+    }
+    if (self) {
+      this.#self = self;
     }
   }
 }
