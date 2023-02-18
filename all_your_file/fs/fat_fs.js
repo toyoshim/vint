@@ -199,8 +199,8 @@ export class FatFs {
     }
     const attributes = await image.getAttributes();
     const bootSector = new Uint8Array(await image.read(0));
-    if (bootSector[0] == 0x60 && bootSector[1] == 0x1c) {
-      this.#readEarlyHumanHeader(bootSector);
+    if (bootSector[0] == 0x60) {
+      this.#readHumanHeader(bootSector, attributes);
     } else {
       this.#readMsdosHeader(bootSector);
     }
@@ -805,7 +805,8 @@ export class FatFs {
 
   #isHuman() {
     return this.#oemName.startsWith('X68') ||
-      this.#oemName.startsWith('Hudson soft 1.');
+      this.#oemName.startsWith('Hudson soft 1.') ||
+      this.#oemName.startsWith('9SCFMT IPL v1.');
   }
 
   #readMsdosHeader(bootSector) {
@@ -831,8 +832,9 @@ export class FatFs {
     }
   }
 
-  #readEarlyHumanHeader(bootSector) {
+  #readHumanHeader(bootSector, attributes) {
     this.#oemName = getAscii(bootSector, 2, 16);
+    console.assert(this.#isHuman(), this.#oemName);
 
     // These fields are probably correct as the numbers are very special.
     this.#bytesPerSector = (bootSector[0x12] << 8) | bootSector[0x13];
@@ -841,8 +843,27 @@ export class FatFs {
     this.#mediaType = bootSector[0x1c];
     console.assert(this.#bytesPerSector == 1024);
     console.assert(this.#rootEntryCount == 192);
-    console.assert(this.#totalSectors == 1232);
-    console.assert(this.#mediaType == 0xfe);
+    console.assert(
+      this.#totalSectors == attributes.sectorsPerTrack * attributes.tracks);
+    switch (this.#mediaType) {
+      case 0xfb:  // 2HS
+        console.assert(this.#totalSectors = 1440);
+        this.#sectorsPerTrack = 9;
+        this.#headCount = 2;
+        break;
+      case 0xfe:  // 2HD
+        this.#sectorsPerTrack = 8;
+        this.#headCount = 2;
+        console.assert(this.#totalSectors = 1232);
+        break;
+      default:
+        console.assert(false, this.#mediaType.toString(16), bootSector);
+    }
+
+    // These fields are estimated via compsrison among early human and 9scfmt.
+    // E.g. sectors/count = 2/2 on early human, but 3/1 on 9scfmt 2HS.
+    this.#fatSectors = bootSector[0x15];
+    this.#fatCount = bootSector[0x1d];
 
     // Following fields are not unique enough to identify the correct mapping.
     // We may be able to ensure them by feeding a modified image to the X68k.
@@ -856,14 +877,7 @@ export class FatFs {
     this.#sectorsPerCluster = 1;
     this.#reservedSectorCount = 1;
 
-    console.assert(bootSector[0x15] == 0x02);
-    console.assert(bootSector[0x1d] == 0x02);
-    this.#fatCount = 2;
-    this.#fatSectors = 2;
-
-    // These fileds are not in the header, maybe.
-    this.#sectorsPerTrack = 8;  // Can be identified via the media type.
-    this.#headCount = 2;        // Can be identified via the media type.
+    // These fileds are not in the header.
     this.#volumeLabel = '';
     this.#fatTypeString = '';
   }
