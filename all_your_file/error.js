@@ -33,6 +33,9 @@ export class Error {
   static createDiskError(hint, self) {
     return new Error(Error.diskError, hint, self);
   }
+  static createWriteProtected(hint, self) {
+    return new Error(Error.writeProtected, hint, self);
+  }
 
   static notImplemented = -1;
   static unknown = 0;
@@ -45,6 +48,7 @@ export class Error {
   static invalidName = 7;
   static notEmpty = 8;
   static diskError = 9;
+  static writeProtected = 10;
 
   id = Error.unknown;
   #hint = '';
