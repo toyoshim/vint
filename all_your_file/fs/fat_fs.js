@@ -5,6 +5,11 @@
 import { Error } from "../error.js"
 import { FatFsIo } from "../io/fat_fs_io.js"
 
+const IPL = {
+  B1_Human: 0x1c,
+  B1_9SCFMT: 0x1e,
+};
+
 function getAscii(buffer, offset, size) {
   const end = offset + size;
   const chars = [];
@@ -199,7 +204,8 @@ export class FatFs {
     }
     const attributes = await image.getAttributes();
     const bootSector = new Uint8Array(await image.read(0));
-    if (bootSector[0] == 0x60) {
+    if (bootSector[0] == 0x60 &&
+      (bootSector[1] == IPL.B1_Human || bootSector[1] == IPL.B1_9SCFMT)) {
       this.#readHumanHeader(bootSector, attributes);
     } else {
       this.#readMsdosHeader(bootSector);
