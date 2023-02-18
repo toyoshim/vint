@@ -151,7 +151,8 @@ export class D88Image {
   }
 
   async getAttributes() {
-    const attributes = await this.#images[0].getAttributes();
+    const attributes = Object.create(await this.#images[0].getAttributes());
+    attributes.name = (await this.#io.getAttributes()).name;
     attributes.bundles = this.#images.length;
     return attributes;
   }
