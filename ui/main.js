@@ -4,6 +4,7 @@
 
 import { Error } from "../all_your_file/error.js"
 import { RootFs } from "../all_your_file/fs/root_fs.js"
+import { MultiImageFs } from "../all_your_file/fs/multi_image_fs.js"
 import { FatFs } from "../all_your_file/fs/fat_fs.js"
 import { NativeFs } from "../all_your_file/fs/native_fs.js"
 import { D88Image } from "../all_your_file/image/d88_image.js"
@@ -72,7 +73,13 @@ b3.addEventListener('click', async () => {
     image = new XdfImage();
   }
   await image.open(io);
-  const fs = new FatFs();
+  const imageAttributes = await image.getAttributes();
+  let fs;
+  if (imageAttributes.bundles) {
+    fs = new MultiImageFs();
+  } else {
+    fs = new FatFs();
+  }
   await fs.open(image);
   await roots[0].mount(fs);
   await roots[1].mount(fs);
