@@ -6,6 +6,7 @@ import { Error } from "../all_your_file/error.js"
 import { RootFs } from "../all_your_file/fs/root_fs.js"
 import { FatFs } from "../all_your_file/fs/fat_fs.js"
 import { NativeFs } from "../all_your_file/fs/native_fs.js"
+import { D88Image } from "../all_your_file/image/d88_image.js"
 import { DcuImage } from "../all_your_file/image/dcu_image.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
@@ -13,7 +14,7 @@ import { NativeIo } from "../all_your_file/io/native_io.js"
 // TODO:
 //  - file operations.
 //  - show current path.
-//  - D88 support.
+//  - mouse operation.
 
 const roots = [];
 roots.push(new RootFs());
@@ -45,11 +46,15 @@ b3.addEventListener('click', async () => {
     types: [
       {
         description: 'All supported images',
-        accept: { '*/*': ['.xdf', '.dcu'] }
+        accept: { '*/*': ['.xdf', '.d88', '.dcu'] }
       },
       {
         description: 'XDF - FD image for X68000 emulators',
         accept: { '*/*': ['.xdf'] }
+      },
+      {
+        description: 'D88 - FD image for PC-8801 emulators',
+        accept: { '*/*': ['.d88'] }
       },
       {
         description: 'DCU - FD image for Disk Copy Utility',
@@ -59,8 +64,10 @@ b3.addEventListener('click', async () => {
   });
   const name = (await io.getAttributes()).name.toLowerCase();
   let image;
-  if (name.endsWith('dcu')) {
+  if (name.endsWith('.dcu')) {
     image = new DcuImage();
+  } else if (name.endsWith('.d88')) {
+    image = new D88Image();
   } else {
     image = new XdfImage();
   }
