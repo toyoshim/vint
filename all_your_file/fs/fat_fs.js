@@ -840,6 +840,7 @@ export class FatFs {
     this.#bytesPerSector = (bootSector[0x12] << 8) | bootSector[0x13];
     this.#rootEntryCount = bootSector[0x19];
     this.#totalSectors = (bootSector[0x1a] << 8) | bootSector[0x1b];
+    this.#sectorsPerTrack = attributes.sectorsPerTrack;
     this.#mediaType = bootSector[0x1c];
     console.assert(this.#bytesPerSector == 1024);
     console.assert(this.#rootEntryCount == 192);
@@ -847,14 +848,14 @@ export class FatFs {
       this.#totalSectors == attributes.sectorsPerTrack * attributes.tracks);
     switch (this.#mediaType) {
       case 0xfb:  // 2HS
-        console.assert(this.#totalSectors = 1440);
-        this.#sectorsPerTrack = 9;
+        console.assert(this.#totalSectors == 1440);
+        console.assert(this.#sectorsPerTrack == 9);
         this.#headCount = 2;
         break;
       case 0xfe:  // 2HD
-        this.#sectorsPerTrack = 8;
+        console.assert(this.#totalSectors == 1232);
+        console.assert(this.#sectorsPerTrack == 8);
         this.#headCount = 2;
-        console.assert(this.#totalSectors = 1232);
         break;
       default:
         console.assert(false, this.#mediaType.toString(16), bootSector);
