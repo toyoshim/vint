@@ -1,10 +1,10 @@
 {
-  "name": "vint, surfing over file images",
+  "name": "vint, surfing over disk images",
   "short_name": "vint",
   "theme_color": "#000",
   "background_color": "#fff",
   "display": "standalone",
-  "description": "vint, surfing over file images - All Your File Are Belong To Us!",
+  "description": "vint, surfing over disk images - All Your File Are Belong To Us!",
   "start_url": "./vint.html",
   "icons": [
     {
