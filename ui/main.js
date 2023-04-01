@@ -20,7 +20,6 @@ import { Message } from "./message_ja.js"
 //  - mouse operation.
 // BUG:
 //  - cursor somtimes goes to a wrong position on quiting a directory.
-//  - cannot copy a file that is larger than 1023B.
 //  - cannot set modified timestamp on FATFS.
 //  - something go wrong on disk full.
 

@@ -148,6 +148,7 @@ export class NativeIo {
     }
     if (this.#cache) {
       const result = await this.#cache.read(this.#offset, size);
+      this.#offset += result.byteLength;
       return result;
     } else {
       return await this.#read(size);
