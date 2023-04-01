@@ -1,28 +1,27 @@
 {
-  "name": "vint",
+  "name": "vint, surfing over file images",
+  "short_name": "vint",
+  "theme_color": "#000",
+  "background_color": "#fff",
   "display": "standalone",
   "description": "vint, surfing over file images - All Your File Are Belong To Us!",
   "start_url": "./vint.html",
   "icons": [
     {
       "src": "images/vint128.png",
-      "sizes": "128x128",
-      "type": "image/png"
+      "sizes": "128x128"
     },
     {
       "src": "images/vint64.png",
-      "sizes": "64x64",
-      "type": "image/png"
+      "sizes": "64x64"
     },
     {
       "src": "images/vint32.png",
-      "sizes": "32x32",
-      "type": "image/png"
+      "sizes": "32x32"
     },
     {
       "src": "images/vint16.png",
-      "sizes": "16x16",
-      "type": "image/png"
+      "sizes": "16x16"
     }
   ]
 }
