@@ -333,6 +333,7 @@ async function runCopy(files, noViewUpdate) {
     } catch (e) {
       console.log('FAILED: ' + file.name, e);
       if (created) {
+        await roots[targetView].flush();
         const dst = await roots[targetView].getIo(file.name);
         attr = await dst.getAttributes();
       }
