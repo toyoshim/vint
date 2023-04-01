@@ -129,6 +129,14 @@ const buttons = [
     }
   },
   {
+    id: 'b7',
+    label: Message.labelDelete,
+    title: Message.tipDelete,
+    callback: async () => {
+      await runDelete(await globFiles(activeView));
+    }
+  },
+  {
     id: 'b8',
     label: Message.labelMkdir,
     title: Message.tipMkdir,
@@ -197,6 +205,8 @@ async function handleKeydown(e) {
     postMessage(activeView, 'cursor-down');
   } else if (e.code == 'KeyC') {
     await runCopy();
+  } else if (e.code == 'KeyD') {
+    await runDelete(await globFiles(activeView));
   } else if (e.code == 'KeyK') {
     await runMkdir();
   } else {
@@ -258,6 +268,20 @@ async function globFiles(view) {
   return [(await sendMessage(view, 'get-current')).data];
 }
 
+async function globDirectory(view) {
+  const files = [];
+  await roots[view].list(entry => {
+    if (entry.volume || (entry.name == '.') || (entry.name == '..')) {
+      return false;
+    }
+    files.push({
+      name: entry.name,
+      directory: entry.directory
+    });
+  });
+  return files;
+}
+
 function getTargetView() {
   return (activeView + 1) & 1;
 }
@@ -270,10 +294,12 @@ async function runCopy() {
       console.log('SKIP directory: ' + file.name);
       continue;
     }
+    let created = false;
+    let attr = null;
     try {
       const src = await roots[activeView].getIo(file.name);
+      created = true;
       const srcAttr = await src.getAttributes();
-      console.log(srcAttr);
       const dstAttr = { create: true };
       dstAttr.modified = srcAttr.lastModified;
       const dst = await roots[targetView].getIo(file.name, dstAttr);
@@ -282,15 +308,44 @@ async function runCopy() {
         await dst.write(data);
       }
       await dst.flush();
-      const lastAttr = await dst.getAttributes();
+      attr = await dst.getAttributes();
+      if (file.index !== undefined) {
+        postMessage(activeView, 'release', file.index);
+      }
+    } catch (e) {
+      console.log('FAILED: ' + file.name, e);
+      if (created) {
+        const dst = await roots[targetView].getIo(file.name);
+        attr = await dst.getAttributes();
+      }
+    }
+    if (created && attr) {
       postMessage(targetView, 'add', {
-        name: lastAttr.name,
+        name: attr.name,
         ext: '',
-        size: lastAttr.size,
-        date: lastAttr.lastModified,
+        size: attr.size,
+        date: attr.lastModified,
         directory: false,
         mount: false
       });
+    }
+  }
+  await roots[targetView].flush();
+}
+
+async function runDelete(files) {
+  for (let file of files) {
+    if (file.name == '.' || file.name == '..') {
+      // Shoudl not happen, but just in case.
+      continue;
+    }
+    if (file.directory) {
+      await roots[activeView].chdir(file.name);
+      await runDelete(await globDirectory(activeView));
+      await roots[activeView].chdir('..');
+    }
+    try {
+      await roots[activeView].remove(file.name);
       if (file.index !== undefined) {
         postMessage(activeView, 'release', file.index);
       }
@@ -298,7 +353,8 @@ async function runCopy() {
       console.log('FAILED: ' + file.name, e);
     }
   }
-  await roots[targetView].flush();
+  await roots[activeView].flush();
+  reload(activeView);
 }
 
 async function runMkdir() {

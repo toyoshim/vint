@@ -7,6 +7,7 @@ export const Message = {
   labelMountNative: '📂 接続',
   labelMountImage: '💾 接続',
   labelCopy: '🗒 コピー',
+  labelDelete: '🗒 削除',
   labelMkdir: '📂 作成',
 
   tipHelp: '使い方を解説したウェブページを開きます',
@@ -14,6 +15,8 @@ export const Message = {
   tipMountImage: 'ディスクイメージを選択してvint上で表示できるようにします',
   tipCopy: `選択したファイルのコピーをします
 （ショートカット: C）`,
+  tipDelete: `選択したファイルやディレクトリを削除します
+（ショートカット: D）`,
   tipMkdir: `ディレクトリを作成します
 （ショートカット: K）`,
 
