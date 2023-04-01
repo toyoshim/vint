@@ -3,6 +3,11 @@
 // in the LICENSE file.
 
 export class Error {
+  static dumpCallStack(message) {
+    const e = new window.Error();
+    console.log(message, e.stack);
+  }
+
   static createNotOpen(hint, self) {
     return new Error(Error.notOpen, hint, self);
   }
