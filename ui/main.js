@@ -14,9 +14,16 @@ import { NativeIo } from "../all_your_file/io/native_io.js"
 import { Message } from "./message_ja.js"
 
 // TODO:
-//  - file operations.
+//  - mkdir operation.
+//  - remove operation.
+//  - mount on selecting a disk image.
+//  - console log view.
 //  - show current path.
 //  - mouse operation.
+// BUG:
+//  - cursor somtimes goes to a wrong position on quiting a directory.
+//  - cannot copy a file that is larger than 1023B.
+//  - cannot set modified timestamp on FATFS.
 
 const roots = [];
 roots.push(new RootFs());
@@ -112,6 +119,22 @@ const buttons = [
       }
       activate();
     }
+  },
+  {
+    id: 'b6',
+    label: Message.labelCopy,
+    title: Message.tipCopy,
+    callback: async () => {
+      await runCopy();
+    }
+  },
+  {
+    id: 'b8',
+    label: Message.labelMkdir,
+    title: Message.tipMkdir,
+    callback: async () => {
+      await runMkdir();
+    }
   }
 ];
 for (let entry of buttons) {
@@ -173,42 +196,9 @@ async function handleKeydown(e) {
     postMessage(activeView, 'select');
     postMessage(activeView, 'cursor-down');
   } else if (e.code == 'KeyC') {
-    const files = await globFiles(activeView);
-    const targetView = getTargetView();
-    for (let file of files) {
-      if (file.directory) {
-        console.log('SKIP directory: ' + file.name);
-        continue;
-      }
-      try {
-        const src = await roots[activeView].getIo(file.name);
-        const srcAttr = await src.getAttributes();
-        console.log(srcAttr);
-        const dstAttr = { create: true };
-        dstAttr.modified = srcAttr.lastModified;
-        const dst = await roots[targetView].getIo(file.name, dstAttr);
-        for (let offset = 0; offset < srcAttr.size; offset += 4096) {
-          const data = await src.read(4096);
-          await dst.write(data);
-        }
-        await dst.flush();
-        const lastAttr = await dst.getAttributes();
-        postMessage(targetView, 'add', {
-          name: lastAttr.name,
-          ext: '',
-          size: lastAttr.size,
-          date: lastAttr.lastModified,
-          directory: false,
-          mount: false
-        });
-        if (file.index !== undefined) {
-          postMessage(activeView, 'release', file.index);
-        }
-      } catch (e) {
-        console.log('FAILED: ' + file.name, e);
-      }
-    }
-    await roots[targetView].flush();
+    await runCopy();
+  } else if (e.code == 'KeyK') {
+    await runMkdir();
   } else {
     console.log(e);
   }
@@ -270,6 +260,71 @@ async function globFiles(view) {
 
 function getTargetView() {
   return (activeView + 1) & 1;
+}
+
+async function runCopy() {
+  const files = await globFiles(activeView);
+  const targetView = getTargetView();
+  for (let file of files) {
+    if (file.directory) {
+      console.log('SKIP directory: ' + file.name);
+      continue;
+    }
+    try {
+      const src = await roots[activeView].getIo(file.name);
+      const srcAttr = await src.getAttributes();
+      console.log(srcAttr);
+      const dstAttr = { create: true };
+      dstAttr.modified = srcAttr.lastModified;
+      const dst = await roots[targetView].getIo(file.name, dstAttr);
+      for (let offset = 0; offset < srcAttr.size; offset += 4096) {
+        const data = await src.read(4096);
+        await dst.write(data);
+      }
+      await dst.flush();
+      const lastAttr = await dst.getAttributes();
+      postMessage(targetView, 'add', {
+        name: lastAttr.name,
+        ext: '',
+        size: lastAttr.size,
+        date: lastAttr.lastModified,
+        directory: false,
+        mount: false
+      });
+      if (file.index !== undefined) {
+        postMessage(activeView, 'release', file.index);
+      }
+    } catch (e) {
+      console.log('FAILED: ' + file.name, e);
+    }
+  }
+  await roots[targetView].flush();
+}
+
+async function runMkdir() {
+  const name = prompt(Message.messageMkdir);
+  if (!name) {
+    return;
+  }
+  try {
+    await roots[activeView].mkdir(name);
+    await roots[activeView].flush();
+    await roots[activeView].list(entry => {
+      if (entry.name != name) {
+        return false;
+      }
+      postMessage(activeView, 'add', {
+        name: entry.name,
+        ext: '',
+        size: entry.size,
+        date: entry.modified,
+        directory: entry.directory,
+        mount: entry.mount
+      });
+    });
+  } catch (e) {
+    console.log('FAILED: ' + name, e);
+  }
 }
 
 // Window size for standalone mode.
