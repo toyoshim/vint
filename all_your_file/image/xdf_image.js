@@ -5,6 +5,7 @@
 import { Error } from "../error.js"
 
 const sectorSize = 1024;
+const sectorCount = 1232;
 
 export class XdfImage {
   #io = null;
@@ -26,6 +27,9 @@ export class XdfImage {
     if (!this.#io) {
       throw Error.createNotOpen();
     }
+    if (sector >= sectorCount) {
+      throw Error.createNoSpace('invalid sector');
+    }
     await this.#io.seek(sector * sectorSize);
     return await this.#io.read(sectorSize);
   }
@@ -33,6 +37,9 @@ export class XdfImage {
   async write(sector, data) {
     if (!this.#io) {
       throw Error.createNotOpen();
+    }
+    if (sector >= sectorCount) {
+      throw Error.createNoSpace('invalid sector');
     }
     await this.#io.seek(sector * sectorSize);
     return await this.#io.write(data);

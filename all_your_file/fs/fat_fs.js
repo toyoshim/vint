@@ -227,7 +227,7 @@ export class FatFs {
       countBlock(32 * this.#rootEntryCount, this.#bytesPerSector);
     this.#dataStartSector =
       this.#rootDirectoryStartSector + this.#rootDirectorySectors;
-    this.#dataSectors = this.#totalSectors - this.#dataSectors;
+    this.#dataSectors = this.#totalSectors - this.#dataStartSector;
 
     const clusters = (this.#dataSectors / this.#sectorsPerCluster) | 0;
     this.#lastClusterId = clusters + 1;
