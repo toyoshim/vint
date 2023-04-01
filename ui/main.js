@@ -191,3 +191,14 @@ async function reload(view) {
     return false;
   });
 }
+
+// Window size for standalone mode.
+let resizeWindow = function () {
+  var frameWidth = window.outerWidth - window.innerWidth;
+  var frameHeight = window.outerHeight - window.innerHeight;
+  window.resizeTo(950 + frameWidth, 560 + frameHeight);
+}
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  resizeWindow();
+  window.addEventListener('resize', resizeWindow);
+}
