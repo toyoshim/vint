@@ -160,6 +160,10 @@ async function handleKeydown(e) {
     }
   } else if (e.key == ' ') {
     postMessage(activeView, 'select');
+    postMessage(activeView, 'cursor-down');
+  } else if (e.key == '.') {
+    // TEST
+    console.log(await sendMessage(activeView, 'get-selected'));
   } else {
     console.log(e);
   }

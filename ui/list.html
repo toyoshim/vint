@@ -149,6 +149,9 @@
         return;
       }
       entries[cursor].div.setAttribute('class', '');
+      if (selected[cursor]) {
+        entries[cursor].div.classList.add('selected');
+      }
     }
 
     function showCursor() {
@@ -157,6 +160,9 @@
       }
       entries[cursor].div.setAttribute(
         'class', active ? 'active-cursor' : 'inactive-cursor');
+      if (selected[cursor]) {
+        entries[cursor].div.classList.add('selected');
+      }
     }
 
     function scroll(y) {
@@ -168,6 +174,7 @@
     let cursor = 0;
     let active = false;
     let scrollY = 0;
+    let selected = {};
     addEventListener('message', e => {
       if (e.data.id != 'vint') {
         return;
@@ -179,6 +186,7 @@
         document.body.appendChild(div);
         entries = [];
         cursor = 0;
+        selected = {};
       } else if (e.data.cmd == 'active') {
         hideCursor();
         active = e.data.data;
@@ -231,7 +239,25 @@
           }
         });
       } else if (e.data.cmd == 'select') {
-        // TODO
+        if (selected[cursor]) {
+          entries[cursor].div.classList.remove('selected');
+          delete selected[cursor];
+        } else {
+          entries[cursor].div.classList.add('selected');
+          selected[cursor] = true;
+        }
+      } else if (e.data.cmd == 'get-selected') {
+        parent.window.postMessage({
+          id: 'vint',
+          cmd: 'selected',
+          data: Object.keys(selected).map(index => {
+            return {
+              index: index,
+              name: entries[index].name,
+              directory: entries[index].directory
+            };
+          })
+        });
       } else if (e.data.cmd == 'add') {
         const div = document.createElement('div');
         e.data.data.div = div;
