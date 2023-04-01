@@ -23,79 +23,98 @@ roots.push(new RootFs());
 const cursors = [[], []];
 let activeView = 0;
 
-const b2 = document.getElementById('b2');
-b2.innerText = 'Mount FS';
-b2.addEventListener('click', async () => {
-  const fs = new NativeFs();
-  await fs.choose();
-  await roots[0].mount(fs);
-  await roots[1].mount(fs);
-  if ((await roots[0].getCwd()) == '/') {
-    await reload(0);
-  }
-  if ((await roots[1].getCwd()) == '/') {
-    await reload(1);
-  }
-  activate();
-});
-
-const b3 = document.getElementById('b3');
-b3.innerText = 'Mnt Image';
-b3.addEventListener('click', async () => {
-  const io = new NativeIo();
-  await io.choose({
-    types: [
-      {
-        description: 'All supported images',
-        accept: { '*/*': ['.xdf', '.d88', '.dcu'] }
-      },
-      {
-        description: 'XDF - FD image for X68000 emulators',
-        accept: { '*/*': ['.xdf'] }
-      },
-      {
-        description: 'D88 - FD image for PC-8801 emulators',
-        accept: { '*/*': ['.d88'] }
-      },
-      {
-        description: 'DCU - FD image for Disk Copy Utility',
-        accept: { '*/*': ['.dcu'] }
+// Setup buttons
+const buttons = [
+  {
+    id: 'b1',
+    label: 'HELP!',
+    callback: async () => {
+      window.open('https://github.com/toyoshim/vint/wiki/');
+    }
+  },
+  {
+    id: 'b2',
+    label: 'Mount FS',
+    callback: async () => {
+      const fs = new NativeFs();
+      await fs.choose();
+      await roots[0].mount(fs);
+      await roots[1].mount(fs);
+      if ((await roots[0].getCwd()) == '/') {
+        await reload(0);
       }
-    ]
+      if ((await roots[1].getCwd()) == '/') {
+        await reload(1);
+      }
+      activate();
+    }
+  },
+  {
+    id: 'b3',
+    label: 'Mnt Image',
+    callback: async () => {
+      const io = new NativeIo();
+      await io.choose({
+        types: [
+          {
+            description: 'All supported images',
+            accept: { '*/*': ['.xdf', '.d88', '.dcu'] }
+          },
+          {
+            description: 'XDF - FD image for X68000 emulators',
+            accept: { '*/*': ['.xdf'] }
+          },
+          {
+            description: 'D88 - FD image for PC-8801 emulators',
+            accept: { '*/*': ['.d88'] }
+          },
+          {
+            description: 'DCU - FD image for Disk Copy Utility',
+            accept: { '*/*': ['.dcu'] }
+          }
+        ]
+      });
+      const name = (await io.getAttributes()).name.toLowerCase();
+      let image;
+      if (name.endsWith('.dcu')) {
+        image = new DcuImage();
+      } else if (name.endsWith('.d88')) {
+        image = new D88Image();
+      } else {
+        image = new XdfImage();
+      }
+      await image.open(io);
+      const imageAttributes = await image.getAttributes();
+      let fs;
+      if (imageAttributes.bundles) {
+        fs = new MultiImageFs();
+      } else {
+        fs = new FatFs();
+      }
+      await fs.open(image);
+      await roots[0].mount(fs);
+      await roots[1].mount(fs);
+      if ((await roots[0].getCwd()) == '/') {
+        await reload(0);
+      }
+      if ((await roots[1].getCwd()) == '/') {
+        await reload(1);
+      }
+      activate();
+    }
+  }
+];
+for (let entry of buttons) {
+  const button = document.getElementById(entry.id);
+  button.innerText = entry.label;
+  button.addEventListener('click', async () => {
+    await entry.callback();
+    // A click takes the focus, but it is really confusing to keep it as the next
+    // key press may cause the click action for the button. Let's release it and
+    // move the focus over the active list view.
+    window.frames[activeView].focus();
   });
-  const name = (await io.getAttributes()).name.toLowerCase();
-  let image;
-  if (name.endsWith('.dcu')) {
-    image = new DcuImage();
-  } else if (name.endsWith('.d88')) {
-    image = new D88Image();
-  } else {
-    image = new XdfImage();
-  }
-  await image.open(io);
-  const imageAttributes = await image.getAttributes();
-  let fs;
-  if (imageAttributes.bundles) {
-    fs = new MultiImageFs();
-  } else {
-    fs = new FatFs();
-  }
-  await fs.open(image);
-  await roots[0].mount(fs);
-  await roots[1].mount(fs);
-  if ((await roots[0].getCwd()) == '/') {
-    await reload(0);
-  }
-  if ((await roots[1].getCwd()) == '/') {
-    await reload(1);
-  }
-  activate();
-});
-
-const b5 = document.getElementById('b5');
-b5.innerText = 'Debug';
-b5.addEventListener('click', async () => {
-});
+}
 
 frames[0].addEventListener('keydown', handleKeydown);
 frames[1].addEventListener('keydown', handleKeydown);
