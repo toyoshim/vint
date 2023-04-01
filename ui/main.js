@@ -11,6 +11,7 @@ import { D88Image } from "../all_your_file/image/d88_image.js"
 import { DcuImage } from "../all_your_file/image/dcu_image.js"
 import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
+import { Message } from "./message_ja.js"
 
 // TODO:
 //  - file operations.
@@ -22,19 +23,22 @@ roots.push(new RootFs());
 roots.push(new RootFs());
 const cursors = [[], []];
 let activeView = 0;
+let agreed = false;  // for disclaimer
 
 // Setup buttons
 const buttons = [
   {
     id: 'b1',
-    label: 'HELP!',
+    label: Message.labelHelp,
+    title: Message.tipHelp,
     callback: async () => {
       window.open('https://github.com/toyoshim/vint/wiki/');
     }
   },
   {
     id: 'b2',
-    label: 'Mount FS',
+    label: Message.labelMountNative,
+    title: Message.tipMountNative,
     callback: async () => {
       const fs = new NativeFs();
       await fs.choose();
@@ -51,8 +55,14 @@ const buttons = [
   },
   {
     id: 'b3',
-    label: 'Mnt Image',
+    label: Message.labelMountImage,
+    title: Message.tipMountImage,
     callback: async () => {
+      if (!agreed && !window.confirm(Message.messageDisclaimer)) {
+        return;
+      }
+      agreed = true;
+
       const io = new NativeIo();
       await io.choose({
         types: [
@@ -106,6 +116,7 @@ const buttons = [
 ];
 for (let entry of buttons) {
   const button = document.getElementById(entry.id);
+  button.title = entry.title;
   button.innerText = entry.label;
   button.addEventListener('click', async () => {
     await entry.callback();
