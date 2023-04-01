@@ -8,6 +8,10 @@
   "start_url": "./vint.html",
   "icons": [
     {
+      "src": "images/vint144.png",
+      "sizes": "144x144"
+    },
+    {
       "src": "images/vint128.png",
       "sizes": "128x128"
     },
