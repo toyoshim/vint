@@ -22,6 +22,7 @@ import { Message } from "./message_ja.js"
 //  - cursor somtimes goes to a wrong position on quiting a directory.
 //  - cannot copy a file that is larger than 1023B.
 //  - cannot set modified timestamp on FATFS.
+//  - something go wrong on disk full.
 
 const roots = [];
 roots.push(new RootFs());
@@ -352,7 +353,10 @@ async function runCopy(files, noViewUpdate) {
   await roots[targetView].flush();
 }
 
-async function runDelete(files) {
+async function runDelete(files, noViewUpdate) {
+  if (!files.length) {
+    return;
+  }
   for (let file of files) {
     if (file.name == '.' || file.name == '..') {
       // Shoudl not happen, but just in case.
@@ -360,7 +364,7 @@ async function runDelete(files) {
     }
     if (file.directory) {
       await roots[activeView].chdir(file.name);
-      await runDelete(await globDirectory(activeView));
+      await runDelete(await globDirectory(activeView), true);
       await roots[activeView].chdir('..');
     }
     try {
@@ -373,7 +377,9 @@ async function runDelete(files) {
     }
   }
   await roots[activeView].flush();
-  reload(activeView);
+  if (!noViewUpdate) {
+    reload(activeView);
+  }
 }
 
 async function runMkdir(view, name) {
