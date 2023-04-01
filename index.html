@@ -18,9 +18,11 @@
   <h1>vint, surfing over disk images</h1>
   <iframe src="vint.html" width="950" height="560"></iframe>
   <script>
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      document.location.href = 'vint.html';
-    }
+    window.addEventListener('resize', e => {
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        document.location.href = 'vint.html';
+      }
+    });
   </script>
 </body>
 
