@@ -45,7 +45,8 @@ export class FatFsIo {
     while (writeOffset < readSize) {
       await this.#readCurrentCluster();
       const offset = this.#offset - this.#clusterOffset;
-      const endOffset = Math.min(offset + readSize, this.#data.data.byteLength);
+      const endOffset = Math.min(
+        offset + readSize - writeOffset, this.#data.data.byteLength);
       for (let i = offset; i < endOffset; ++i) {
         dst[writeOffset++] = this.#data.data[i];
       }
@@ -64,8 +65,8 @@ export class FatFsIo {
     while (writeOffset < buffer.byteLength) {
       await this.#readCurrentCluster();
       const offset = this.#offset - this.#clusterOffset;
-      const endOffset =
-        Math.min(offset + buffer.byteLength, this.#data.data.byteLength);
+      const endOffset = Math.min(
+        offset + buffer.byteLength - writeOffset, this.#data.data.byteLength);
       for (let i = offset; i < endOffset; ++i) {
         this.#data.data[i] = src[writeOffset++];
       }
