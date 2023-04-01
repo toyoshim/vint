@@ -318,11 +318,11 @@ async function runCopy(files, noViewUpdate) {
     let attr = null;
     try {
       const src = await roots[activeView].getIo(file.name);
-      created = true;
       const srcAttr = await src.getAttributes();
       const dstAttr = { create: true };
       dstAttr.modified = srcAttr.lastModified;
       const dst = await roots[targetView].getIo(file.name, dstAttr);
+      created = true;
       for (let offset = 0; offset < srcAttr.size; offset += 4096) {
         const data = await src.read(4096);
         await dst.write(data);
