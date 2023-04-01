@@ -125,7 +125,7 @@ const buttons = [
     label: Message.labelCopy,
     title: Message.tipCopy,
     callback: async () => {
-      await runCopy();
+      await runCopy(await globFiles(activeView));
     }
   },
   {
@@ -141,7 +141,7 @@ const buttons = [
     label: Message.labelMkdir,
     title: Message.tipMkdir,
     callback: async () => {
-      await runMkdir();
+      await runMkdir(activeView, prompt(Message.messageMkdir));
     }
   }
 ];
@@ -204,11 +204,11 @@ async function handleKeydown(e) {
     postMessage(activeView, 'select');
     postMessage(activeView, 'cursor-down');
   } else if (e.code == 'KeyC') {
-    await runCopy();
+    await runCopy(await globFiles(activeView));
   } else if (e.code == 'KeyD') {
     await runDelete(await globFiles(activeView));
   } else if (e.code == 'KeyK') {
-    await runMkdir();
+    await runMkdir(activeView, prompt(Message.messageMkdir));
   } else {
     console.log(e);
   }
@@ -286,12 +286,32 @@ function getTargetView() {
   return (activeView + 1) & 1;
 }
 
-async function runCopy() {
-  const files = await globFiles(activeView);
+async function runCopy(files, noViewUpdate) {
   const targetView = getTargetView();
   for (let file of files) {
+    if (file.name == '.' || file.name == '..') {
+      // Shoudl not happen, but just in case.
+      continue;
+    }
     if (file.directory) {
-      console.log('SKIP directory: ' + file.name);
+      let srcChdired = false;
+      let dstChdired = false;
+      try {
+        await runMkdir(targetView, file.name);
+        await roots[targetView].chdir(file.name);
+        dstChdired = true;
+        await roots[activeView].chdir(file.name);
+        srcChdired = true;
+        await runCopy(await globDirectory(activeView), true);
+      } catch (e) {
+        console.log('FAILED: ' + file.name, e);
+      }
+      if (srcChdired) {
+        roots[activeView].chdir('..');
+      }
+      if (dstChdired) {
+        roots[targetView].chdir('..');
+      }
       continue;
     }
     let created = false;
@@ -319,7 +339,7 @@ async function runCopy() {
         attr = await dst.getAttributes();
       }
     }
-    if (created && attr) {
+    if (!noViewUpdate && created && attr) {
       postMessage(targetView, 'add', {
         name: attr.name,
         ext: '',
@@ -357,19 +377,18 @@ async function runDelete(files) {
   reload(activeView);
 }
 
-async function runMkdir() {
-  const name = prompt(Message.messageMkdir);
+async function runMkdir(view, name) {
   if (!name) {
     return;
   }
   try {
-    await roots[activeView].mkdir(name);
-    await roots[activeView].flush();
-    await roots[activeView].list(entry => {
+    await roots[view].mkdir(name);
+    await roots[view].flush();
+    await roots[view].list(entry => {
       if (entry.name != name) {
         return false;
       }
-      postMessage(activeView, 'add', {
+      postMessage(view, 'add', {
         name: entry.name,
         ext: '',
         size: entry.size,
