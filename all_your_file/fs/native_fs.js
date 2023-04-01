@@ -17,6 +17,13 @@ export class NativeFs {
     this.#volumeLabel = this.#handle.name;
   }
 
+  async clone() {
+    const fs = new NativeFs();
+    fs.#handle = this.#handle;
+    fs.#volumeLabel = this.#volumeLabel;
+    return fs;
+  }
+
   async list(observer) {
     if (this.#parentHandles.length != 0) {
       await this.#notifyEntry(observer, '..', true, null, 0);

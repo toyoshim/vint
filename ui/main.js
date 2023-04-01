@@ -43,7 +43,7 @@ const buttons = [
       const fs = new NativeFs();
       await fs.choose();
       await roots[0].mount(fs);
-      await roots[1].mount(fs);
+      await roots[1].mount(await fs.clone());
       if ((await roots[0].getCwd()) == '/') {
         await reload(0);
       }
@@ -103,7 +103,7 @@ const buttons = [
       }
       await fs.open(image);
       await roots[0].mount(fs);
-      await roots[1].mount(fs);
+      await roots[1].mount(await fs.clone());
       if ((await roots[0].getCwd()) == '/') {
         await reload(0);
       }
@@ -172,9 +172,43 @@ async function handleKeydown(e) {
   } else if (e.key == ' ') {
     postMessage(activeView, 'select');
     postMessage(activeView, 'cursor-down');
-  } else if (e.key == '.') {
-    // TEST
-    console.log(await sendMessage(activeView, 'get-selected'));
+  } else if (e.code == 'KeyC') {
+    const files = await globFiles(activeView);
+    const targetView = getTargetView();
+    for (let file of files) {
+      if (file.directory) {
+        console.log('SKIP directory: ' + file.name);
+        continue;
+      }
+      try {
+        const src = await roots[activeView].getIo(file.name);
+        const srcAttr = await src.getAttributes();
+        console.log(srcAttr);
+        const dstAttr = { create: true };
+        dstAttr.modified = srcAttr.lastModified;
+        const dst = await roots[targetView].getIo(file.name, dstAttr);
+        for (let offset = 0; offset < srcAttr.size; offset += 4096) {
+          const data = await src.read(4096);
+          await dst.write(data);
+        }
+        await dst.flush();
+        const lastAttr = await dst.getAttributes();
+        postMessage(targetView, 'add', {
+          name: lastAttr.name,
+          ext: '',
+          size: lastAttr.size,
+          date: lastAttr.lastModified,
+          directory: false,
+          mount: false
+        });
+        if (file.index !== undefined) {
+          postMessage(activeView, 'release', file.index);
+        }
+      } catch (e) {
+        console.log('FAILED: ' + file.name, e);
+      }
+    }
+    await roots[targetView].flush();
   } else {
     console.log(e);
   }
@@ -224,6 +258,18 @@ async function reload(view) {
     });
     return false;
   });
+}
+
+async function globFiles(view) {
+  const selected = await sendMessage(view, 'get-selected');
+  if (selected.data.length) {
+    return selected.data;
+  }
+  return [(await sendMessage(view, 'get-current')).data];
+}
+
+function getTargetView() {
+  return (activeView + 1) & 1;
 }
 
 // Window size for standalone mode.

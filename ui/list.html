@@ -246,6 +246,11 @@
           entries[cursor].div.classList.add('selected');
           selected[cursor] = true;
         }
+      } else if (e.data.cmd == 'release') {
+        if (selected[e.data.data]) {
+          entries[e.data.data].div.classList.remove('selected');
+          delete selected[e.data.data];
+        }
       } else if (e.data.cmd == 'get-selected') {
         parent.window.postMessage({
           id: 'vint',

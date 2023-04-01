@@ -20,7 +20,7 @@ dictionary IoAttributes {
 interface Io {
   async IoAttributes getAttributes();
   async seek(unsigned long long offset);
-  async ArrayBuffer read(unsigned long long offset);
+  async ArrayBuffer read(unsigned long long size);
   async write(ArrayBuffer buffer);
   async truncate(unsigned long long size);
   async flush();

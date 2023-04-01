@@ -7,6 +7,7 @@ import { FatFs } from "./fat_fs.js"
 
 export class MultiImageFs {
   #images = [];
+  #image = null;
   #fs = null;
   #name = '';
 
@@ -23,6 +24,13 @@ export class MultiImageFs {
         this.#images.push(await image.getImage(i));
       }
     }
+    this.#image = image;
+  }
+
+  async clone() {
+    const fs = new MultiImageFs();
+    await fs.open(this.#image)
+    return fs;
   }
 
   async list(observer) {

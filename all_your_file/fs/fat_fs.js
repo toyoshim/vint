@@ -258,6 +258,12 @@ export class FatFs {
     this.#path = [];
   }
 
+  async clone() {
+    const fs = new FatFs();
+    await fs.open(this.#image);
+    return fs;
+  }
+
   async list(observer) {
     await this.#list(await this.#readDirectoryEntries(), observer, true);
   }
