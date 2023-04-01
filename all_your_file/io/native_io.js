@@ -138,6 +138,9 @@ export class NativeIo {
     };
   }
 
+  async setAttributes(attributes) {
+  }
+
   async seek(offset) {
     this.#offset = offset;
   }

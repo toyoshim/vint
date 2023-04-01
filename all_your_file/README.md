@@ -11,14 +11,19 @@ The Io API handles single storage. It may be a file, or a raw disk. So this API
 will be an entry point to access actual data.
 
 ```webidl
-dictionary IoAttributes {
+dictionary IoGetAttributes {
   DOMString name;
   unsigned long long size;
   Date lastModified;
 };
 
+dictionary IoSetAttributes {
+  Date lastModified;
+};
+
 interface Io {
-  async IoAttributes getAttributes();
+  async IoGetAttributes getAttributes();
+  async setAttributes(IoSetAttributes attributes);
   async seek(unsigned long long offset);
   async ArrayBuffer read(unsigned long long size);
   async write(ArrayBuffer buffer);

@@ -799,7 +799,7 @@ export class FatFs {
         data[offset + 30] = (options.size >> 16) & 0xff;
         data[offset + 31] = (options.size >> 24) & 0xff;
       }
-      const modified = createTimestamp();
+      const modified = createTimestamp(options.modified);
       data[offset + 22] = modified.time & 0xff;
       data[offset + 23] = (modified.time >> 8) & 0xff;
       data[offset + 24] = modified.date & 0xff;

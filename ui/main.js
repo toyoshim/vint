@@ -325,6 +325,7 @@ async function runCopy(files, noViewUpdate) {
         const data = await src.read(4096);
         await dst.write(data);
       }
+      await dst.setAttributes({ lastModified: srcAttr.lastModified });
       await dst.flush();
       attr = await dst.getAttributes();
       if (file.index !== undefined) {

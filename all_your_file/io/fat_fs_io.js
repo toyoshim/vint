@@ -24,6 +24,14 @@ export class FatFsIo {
     };
   }
 
+  async setAttributes(attributes) {
+    if (attributes.lastModified) {
+      this.#options.lastModified = attributes.lastModified;
+      await this.#options.updateEntry({ modified: attributes.lastModified });
+      await this.#options.flushEntry();
+    }
+  }
+
   async seek(offset) {
     this.#offset = Math.min(offset, this.#options.size);
   }
