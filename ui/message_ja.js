@@ -16,9 +16,9 @@ export const Message = {
   tipCopy: `選択したファイルのコピーをします
 （ショートカット: C）`,
   tipDelete: `選択したファイルやディレクトリを削除します
-（ショートカット: D）`,
-  tipMkdir: `ディレクトリを作成します
 （ショートカット: K）`,
+  tipMkdir: `ディレクトリを作成します
+（ショートカット: M）`,
 
   messageDisclaimer: `【注意】
 

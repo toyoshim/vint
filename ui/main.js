@@ -14,8 +14,6 @@ import { NativeIo } from "../all_your_file/io/native_io.js"
 import { Message } from "./message_ja.js"
 
 // TODO:
-//  - mkdir operation.
-//  - remove operation.
 //  - mount on selecting a disk image.
 //  - console log view.
 //  - show current path.
@@ -205,9 +203,9 @@ async function handleKeydown(e) {
     postMessage(activeView, 'cursor-down');
   } else if (e.code == 'KeyC') {
     await runCopy(await globFiles(activeView));
-  } else if (e.code == 'KeyD') {
-    await runDelete(await globFiles(activeView));
   } else if (e.code == 'KeyK') {
+    await runDelete(await globFiles(activeView));
+  } else if (e.code == 'KeyM') {
     await runMkdir(activeView, prompt(Message.messageMkdir));
   } else {
     console.log(e);
@@ -265,7 +263,7 @@ async function globFiles(view) {
   if (selected.data.length) {
     return selected.data;
   }
-  return [(await sendMessage(view, 'get-current')).data];
+  return [];
 }
 
 async function globDirectory(view) {
