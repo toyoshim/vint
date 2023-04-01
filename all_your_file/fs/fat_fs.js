@@ -446,7 +446,7 @@ export class FatFs {
   }
 
   async flush() {
-    this.#image.flush();
+    await this.#image.flush();
   }
 
   async close() {
