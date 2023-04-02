@@ -56,6 +56,7 @@ export class Error {
   static writeProtected = 10;
 
   id = Error.unknown;
+  stack = null;
   #hint = '';
   #self = null;
 
@@ -67,5 +68,6 @@ export class Error {
     if (self) {
       this.#self = self;
     }
+    this.stack = (new window.Error()).stack;
   }
 }

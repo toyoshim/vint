@@ -13,14 +13,6 @@ import { XdfImage } from "../all_your_file/image/xdf_image.js"
 import { NativeIo } from "../all_your_file/io/native_io.js"
 import { Message } from "./message_ja.js"
 
-// TODO:
-//  - mount on selecting a disk image.
-//  - console log view.
-//  - show current path.
-//  - mouse operation.
-// BUG:
-//  - cursor somtimes goes to a wrong position on quiting a directory.
-
 const roots = [];
 roots.push(new RootFs());
 roots.push(new RootFs());
@@ -54,6 +46,8 @@ const buttons = [
         await reload(1);
       }
       activate();
+      const attr = await fs.getAttributes();
+      putLog('Mount: ' + attr.volumeLabel);
     }
   },
   {
@@ -114,6 +108,9 @@ const buttons = [
         await reload(1);
       }
       activate();
+      const attr = await fs.getAttributes();
+      putLog('Mount: ' + attr.volumeLabel);
+      putLog('VINT Hint: ' + Message.messageBackup);
     }
   },
   {
@@ -238,6 +235,24 @@ function postMessage(view, cmd, data) {
   }, document.location.origin);
 }
 
+function putLog(text) {
+  console.log(' > ' + text);
+  frames[2].postMessage({
+    id: 'vint',
+    cmd: 'console-put',
+    data: text
+  });
+}
+
+function appendLog(text) {
+  console.log(' + ' + text);
+  frames[2].postMessage({
+    id: 'vint',
+    cmd: 'console-append',
+    data: text
+  });
+}
+
 async function reload(view) {
   postMessage(view, 'reset');
   await roots[view].list(entry => {
@@ -292,6 +307,7 @@ async function runCopy(files, noViewUpdate) {
     if (file.directory) {
       let srcChdired = false;
       let dstChdired = false;
+      putLog('Chdir: ' + file.name);
       try {
         await runMkdir(targetView, file.name);
         await roots[targetView].chdir(file.name);
@@ -299,8 +315,10 @@ async function runCopy(files, noViewUpdate) {
         await roots[activeView].chdir(file.name);
         srcChdired = true;
         await runCopy(await globDirectory(activeView), true);
+        putLog('CopyDir: ' + file.name + ' ... ' + Message.messageOk);
       } catch (e) {
-        console.log('FAILED: ' + file.name, e);
+        appendLog(
+          ' ... ' + Message.messageFail + ' - ' + Message.getErrorMessage(e));
       }
       if (srcChdired) {
         roots[activeView].chdir('..');
@@ -308,11 +326,13 @@ async function runCopy(files, noViewUpdate) {
       if (dstChdired) {
         roots[targetView].chdir('..');
       }
+      putLog('Chdir: ..');
       continue;
     }
     let created = false;
     let attr = null;
     try {
+      putLog('Copy: ' + file.name + ' ... ');
       const src = await roots[activeView].getIo(file.name);
       const srcAttr = await src.getAttributes();
       const dstAttr = { create: true };
@@ -329,9 +349,10 @@ async function runCopy(files, noViewUpdate) {
       if (file.index !== undefined) {
         postMessage(activeView, 'release', file.index);
       }
+      appendLog(Message.messageOk);
     } catch (e) {
-      console.log('FAILED: ' + file.name, e);
       if (created) {
+        appendLog(Message.messageFail + ' - ' + Message.getErrorMessage(e));
         await roots[targetView].flush();
         const dst = await roots[targetView].getIo(file.name);
         attr = await dst.getAttributes();
@@ -362,16 +383,20 @@ async function runDelete(files, noViewUpdate) {
     }
     if (file.directory) {
       await roots[activeView].chdir(file.name);
+      putLog('Chdir: ' + file.name);
       await runDelete(await globDirectory(activeView), true);
       await roots[activeView].chdir('..');
+      putLog('Chdir: ..');
     }
     try {
+      putLog('Remove: ' + file.name + ' ... ');
       await roots[activeView].remove(file.name);
       if (file.index !== undefined) {
         postMessage(activeView, 'release', file.index);
       }
+      appendLog(Message.messageOk);
     } catch (e) {
-      console.log('FAILED: ' + file.name, e);
+      appendLog(Message.messageFail + ' - ' + Message.getErrorMessage(e));
     }
   }
   await roots[activeView].flush();
@@ -382,9 +407,11 @@ async function runDelete(files, noViewUpdate) {
 
 async function runMkdir(view, name) {
   if (!name) {
+    putLog('Mkdir: ' + Message.messageCancelled);
     return;
   }
   try {
+    putLog('Mkdir: ' + name + ' ... ');
     await roots[view].mkdir(name);
     await roots[view].flush();
     await roots[view].list(entry => {
@@ -400,8 +427,9 @@ async function runMkdir(view, name) {
         mount: entry.mount
       });
     });
+    appendLog(Message.messageOk);
   } catch (e) {
-    console.log('FAILED: ' + name, e);
+    appendLog(Message.messageFail + ' - ' + Message.getErrorMessage(e));
   }
 }
 
@@ -409,9 +437,11 @@ async function runMkdir(view, name) {
 let resizeWindow = function () {
   var frameWidth = window.outerWidth - window.innerWidth;
   var frameHeight = window.outerHeight - window.innerHeight;
-  window.resizeTo(950 + frameWidth, 560 + frameHeight);
+  window.resizeTo(950 + frameWidth, 700 + frameHeight);
 }
 if (window.matchMedia('(display-mode: standalone)').matches) {
   resizeWindow();
   window.addEventListener('resize', resizeWindow);
 }
+
+putLog(Message.messageReady);

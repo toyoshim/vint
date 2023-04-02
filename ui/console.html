@@ -1,0 +1,78 @@
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Source+Code+Pro:wght@100&family=M+PLUS+Rounded+1c:wght@100&display=swap"
+    rel="stylesheet">
+  <style>
+    body {
+      border: 0px;
+      margin: 0px;
+      background-color: black;
+    }
+
+    div {
+      background-color: black;
+      color: white;
+      font-family: 'Source Code Pro', 'M PLUS Rounded 1c', monospace;
+      font-size: 10pt;
+      border-width: 1px;
+      border-bottom: solid;
+      border-color: black;
+      height: 11pt;
+    }
+
+    div.main {
+      width: 440px;
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="main" class="main"></div>
+
+  <script>
+    const main = document.getElementById('main');
+
+    function createLine(text) {
+      const div = document.createElement('div');
+      div.innerText = text || '';
+      return div;
+    }
+
+    function putLog(text) {
+      if (main.childNodes.length < 16) {
+        main.appendChild(createLine(text));
+      } else {
+        const node = main.firstChild;
+        main.removeChild(node);
+        node.innerText = text || '';
+        main.appendChild(node);
+      }
+      scrollTo(0, main.scrollHeight);
+    }
+
+    function appendLog(text) {
+      main.lastChild.innerText += text;
+      scrollTo(0, main.scrollHeight);
+    }
+
+    addEventListener('message', e => {
+      console.log(e);
+      if (e.data.id != 'vint') {
+        return;
+      }
+      if (e.data.cmd == 'console-put') {
+        putLog(e.data.data);
+      } else if (e.data.cmd == 'console-append') {
+        appendLog(e.data.data);
+      }
+    });
+  </script>
+</body>
+
+</html>
